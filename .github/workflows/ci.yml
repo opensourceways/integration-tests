@@ -10,22 +10,22 @@ on:
 jobs:
   base-community-tests:
     runs-on: ubuntu-latest
-    name: Base Community Tests
+    name: Meeting Server - Base Community Tests
     steps:
       - uses: actions/checkout@v4
 
       - name: Run base community tests
         run: |
-          chmod +x service/base_community/run_all.sh
-          bash service/base_community/run_all.sh
+          chmod +x services/meeting-server/base_community/run_all.sh
+          bash services/meeting-server/base_community/run_all.sh
 
   openeuler-community-tests:
     runs-on: ubuntu-latest
-    name: openEuler Community Tests
+    name: Meeting Server - openEuler Community Tests
     steps:
       - uses: actions/checkout@v4
 
       - name: Run openEuler community tests
         run: |
-          chmod +x service/openeuler_community/run_all.sh
-          bash service/openeuler_community/run_all.sh
+          chmod +x services/meeting-server/openeuler_community/run_all.sh
+          bash services/meeting-server/openeuler_community/run_all.sh

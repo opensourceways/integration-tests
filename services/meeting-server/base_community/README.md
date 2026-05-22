@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-service/base_community/
+services/meeting-server/base_community/
 ├── README.md              # 本文件
 ├── run_all.sh             # 执行所有公共测试用例
 └── test_*.sh              # 公共测试用例脚本
@@ -15,10 +15,10 @@ service/base_community/
 
 ```bash
 # 执行所有公共测试用例
-./run_all.sh
+bash services/meeting-server/base_community/run_all.sh
 
 # 执行单个测试用例
-./test_service_a_basic.sh
+bash services/meeting-server/base_community/test_service_a_basic.sh
 ```
 
 ## 测试用例说明

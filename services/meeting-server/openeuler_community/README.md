@@ -5,7 +5,7 @@ openEuler 社区专属测试用例。该目录下的测试用例仅在 openEuler
 ## 目录结构
 
 ```
-service/openeuler_community/
+services/meeting-server/openeuler_community/
 ├── README.md              # 本文件
 ├── run_all.sh             # 执行所有 openEuler 专属测试用例
 └── test_*.sh              # openEuler 专属测试用例脚本
@@ -15,7 +15,7 @@ service/openeuler_community/
 
 ```bash
 # 执行所有 openEuler 专属测试用例
-./run_all.sh
+bash services/meeting-server/openeuler_community/run_all.sh
 ```
 
 ## 与 base_community 的关系
