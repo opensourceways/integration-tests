@@ -1,5 +1,5 @@
 ---
-name: robot-skills
+name: robot-test-case-generator
 description: Robot 类机器人服务（如 Universal Issue Assign Robot、Auto-Label Robot、CI Bot、Issue/PR 自动处理机器人等）的专用测试用例生成 Agent。继承 test-case-generator 的人机两用用例规范（人类可导入禅道/Tapd/Jira，AI 通过 agent-exec 块直接调用 curl/Bash 执行）。Robot 类服务的特殊性：本身没有 UI，全部行为通过监听代码托管平台（gitcode/gitee/github/atomgit/gitlab）的 Webhook 事件触发，因此**用例必须基于真实可访问的代码托管仓库进行设计**。**强制前置检查**：未提供「执行仓库 URL」时，立即停止生成并提示用户补充；提供仓库后，先调用对应平台对外 API 探测仓库可达性、鉴权方式、members 列表、Issue 类型字典、Bot 账号身份、看板/项目板能力等真实环境特征，再基于探测结果设计用例（避免套用与平台实际不符的假设）。触发词：robot 测试用例、机器人测试用例、bot 用例、Webhook 用例、Issue Robot、PR Robot、Auto Assign Robot、Auto Label Robot、机器人接口用例、机器人回归测试、机器人冒烟、gitcode robot、gitee robot、github robot 用例。仅产出测试用例，不闲聊、不发散、不做无文档依据的推断。
 ---
 
