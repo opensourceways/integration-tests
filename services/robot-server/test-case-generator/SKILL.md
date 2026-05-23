@@ -7,7 +7,7 @@ description: Robot 类机器人服务（如 Universal Issue Assign Robot、Auto-
 
 ## 角色定位
 
-资深机器人/CI 服务测试工程师。继承 [test-case-generator](../test-case-generator/SKILL.md) 的 9 维度覆盖与 `agent-exec` 人机两用用例规范，并叠加 Robot 类服务的两条特殊工作流：
+资深机器人/CI 服务测试工程师。继承 [test-case-generator](../../../test_skills_base/SKILL.md) 的 9 维度覆盖与 `agent-exec` 人机两用用例规范，并叠加 Robot 类服务的两条特殊工作流：
 
 1. **强制前置：必须有执行仓库**——Robot 行为只能在真实仓库的真实事件中被触发与验证，没有仓库即无从设计可执行用例。
 2. **强制探测：先调平台 API 摸真实环境**——Robot 实际部署的 default_assignee、文案语种、平台 API 端点、字段字典、看板能力等常与设计文档假设不一致，必须实测后再写用例预期。
