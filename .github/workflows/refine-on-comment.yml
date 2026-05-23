@@ -1,0 +1,341 @@
+name: 测试集成修复
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: refine-pr-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  # Two trigger conditions are gated explicitly in this preflight:
+  #   1) the PR being commented on is a DRAFT in the current repo
+  #   2) that draft PR touches paths matching 'services/*/(TestStrategy.md|test_cases.py)'
+  # 'act' only runs when both pass (gate.outputs.go == 'true').
+  gate:
+    if: >-
+      github.event.issue.pull_request != null
+      && github.event.comment.user.type != 'Bot'
+      && !endsWith(github.event.comment.user.login, '-bot')
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.decide.outputs.go }}
+      mode: ${{ steps.mode.outputs.mode }}
+      head_ref: ${{ steps.decide.outputs.head_ref }}
+      head_repo: ${{ steps.decide.outputs.head_repo }}
+    steps:
+      - name: Parse comment mode
+        id: mode
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          first_line=$(printf '%s' "$COMMENT_BODY" | awk 'NF{print; exit}' | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+          if [ "$first_line" = "/accept" ]; then
+            echo "mode=accept" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=refine" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide go/no-go (draft + services/ path)
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          DATA=$(gh api "/repos/${REPO}/pulls/${PR_NUM}")
+          IS_DRAFT=$(echo "$DATA" | jq -r '.draft')
+          HEAD_REF=$(echo "$DATA" | jq -r '.head.ref')
+          HEAD_REPO=$(echo "$DATA" | jq -r '.head.repo.full_name')
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "head_repo=$HEAD_REPO" >> "$GITHUB_OUTPUT"
+
+          # Condition 1: PR must be a draft.
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "::notice::PR #${PR_NUM} is not a draft; gate=no-go (condition 1 failed)."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Condition 2: PR must touch services/<module>/{TestStrategy.md,test_cases.py}.
+          if gh pr view "$PR_NUM" --repo "$REPO" --json files -q '.files[].path' \
+             | grep -qE '^services/[^/]+/(TestStrategy\.md|test_cases\.py)$'; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR #${PR_NUM} draft + services/ test files; gate=go."
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR #${PR_NUM} has no services/*/(TestStrategy.md|test_cases.py); gate=no-go."
+          fi
+
+  act:
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
+    runs-on: [self-hosted, ai-dev-runner]
+    steps:
+      # /accept on a draft PR → convert to ready-for-review, then stop.
+      - name: Mark draft PR ready for review
+        if: needs.gate.outputs.mode == 'accept'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh pr ready "$PR_NUM" --repo "$REPO"
+          gh api -X POST -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content="+1" >/dev/null
+          echo "::notice::PR #${PR_NUM} marked ready for review (triggered by /accept)"
+          gh issue comment "$PR_NUM" --repo "$REPO" --body "✅ \`/accept\` 已生效 — 草稿 PR 已转为正式 PR，进入合入门禁流程。
+
+          run 日志：${RUN_URL}" || true
+
+      - name: Comment — refine start
+        if: needs.gate.outputs.mode == 'refine' && needs.gate.outputs.head_repo == github.repository
+        env:
+          # MUST stay on GITHUB_TOKEN (= github-actions[bot], type=Bot) so the
+          # gate filter excludes this comment from re-triggering the workflow.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$PR_NUM" --repo "$REPO" --body "👀 \`测试集成修复\` 已触发 — 正在根据评论修订模块测试策略 / 用例。
+
+          - 触发评论：${COMMENT_URL}
+          - run 日志：${RUN_URL}" || true
+
+      - name: React with 'eyes'
+        if: needs.gate.outputs.mode == 'refine' && needs.gate.outputs.head_repo == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api -X POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content=eyes >/dev/null
+
+      - name: Checkout PR head branch
+        if: needs.gate.outputs.mode == 'refine' && needs.gate.outputs.head_repo == github.repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Locate target files in PR
+        id: files
+        if: needs.gate.outputs.mode == 'refine' && needs.gate.outputs.head_repo == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR_NUM" --json files -q '.files[].path' > pr-files.txt
+          grep -E '^services/[^/]+/(TestStrategy\.md|test_cases\.py)$' pr-files.txt > target-files.txt || true
+          if [ ! -s target-files.txt ]; then
+            echo "::notice::No services/*/(TestStrategy.md|test_cases.py) in this PR; nothing to refine."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "Target files:"
+          cat target-files.txt
+
+      - name: Setup opencode
+        if: steps.files.outputs.found == 'true'
+        env:
+          HOME: /home/runner
+          OPENCODE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if ! command -v opencode >/dev/null 2>&1; then
+            npm install -g opencode-ai || curl -fsSL https://opencode.ai/install | bash
+          fi
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.opencode/bin:$PATH"
+          command -v opencode || { echo "::error::opencode install failed"; exit 1; }
+          opencode --version || true
+          mkdir -p "$HOME/.local/share/opencode" "$HOME/.config/opencode"
+          printf '{"alibaba-cn":{"type":"api","key":"%s"}}\n' "$OPENCODE_API_KEY" > "$HOME/.local/share/opencode/auth.json"
+          chmod 600 "$HOME/.local/share/opencode/auth.json"
+          printf '{"$schema":"https://opencode.ai/config.json"}\n' > "$HOME/.config/opencode/opencode.json"
+
+      - name: Refine via opencode (in-place substantive edits)
+        if: steps.files.outputs.found == 'true'
+        env:
+          HOME: /home/runner
+          OPENCODE_MODEL: alibaba-cn/glm-5
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          command -v opencode >/dev/null 2>&1 || { echo "::error::opencode missing from PATH after Setup"; exit 1; }
+          mkdir -p /tmp/refine
+          printf '%s' "$COMMENT_BODY" > /tmp/refine/comment.txt
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys
+
+          # In integration-tests, skill dirs are LOCAL — no cross-repo clone needed.
+          REPO_ROOT = pathlib.Path(".")
+          GENERAL_SKILL_DIR = REPO_ROOT / "test_skills_base" / "test-case-generator"
+
+          # Group target files by module (path: services/<mod>/<file>)
+          by_module = {}
+          for line in pathlib.Path("target-files.txt").read_text().splitlines():
+              p = line.strip()
+              if not p:
+                  continue
+              parts = p.split("/")
+              if len(parts) < 3:
+                  continue
+              by_module.setdefault(parts[1], []).append(p)
+
+          for module, files in by_module.items():
+              strategy = next((f for f in files if f.endswith("TestStrategy.md")), None)
+              cases = next((f for f in files if f.endswith("test_cases.py")), None)
+
+              skill_lines = []
+              if GENERAL_SKILL_DIR.is_dir():
+                  skill_lines.append(f"- 通用测试用例生成技能（参考）：{GENERAL_SKILL_DIR}/SKILL.md + references/")
+              mod_skill_dir = REPO_ROOT / "services" / module / "test-case-generator"
+              if mod_skill_dir.is_dir():
+                  skill_lines.append(f"- 模块特性测试技能（参考）：{mod_skill_dir}/SKILL.md + references/")
+
+              prompt_lines = [
+                  "你是模块测试集成修订 agent。本次任务必须一次性跑完，全流程无需任何人工确认。",
+                  "",
+                  "【任务】根据测试专家的评审评论，对模块级测试策略 / 用例做**实质性**修订，直接 in-place 修改下面的文件。",
+                  "",
+                  "【输入】（请用 Read 工具读取后再开始）",
+                  "1. 评审评论原文：/tmp/refine/comment.txt",
+              ]
+              i = 2
+              if strategy:
+                  prompt_lines.append(f"{i}. 当前模块测试策略：{strategy}")
+                  i += 1
+              if cases:
+                  prompt_lines.append(f"{i}. 当前模块测试用例（pytest）：{cases}")
+              if skill_lines:
+                  prompt_lines += ["", "【技能参考（仅参考方法论，不改 output 形态）】"] + skill_lines
+              prompt_lines += [
+                  "",
+                  "【修改原则】",
+                  "1. 必须读懂评论的真实诉求（增删用例 / 补边界值 / 改优先级 / 调测试维度 / 修字段定义 等），落到文件的合适位置。",
+                  "2. 只动评论所要求的部分；不相关内容一律不动。**模块既有的其他 issue 来源的用例必须原样保留**。",
+                  "3. **严格禁止**任何 meta / 过程性 / 日志类内容：",
+                  "   - 不要新增 `### 自动修订`、`修订记录`、`变更说明`、`Changelog` 等章节",
+                  "   - 不要写「由 GitHub Action 自动写入…」「评论来源…」「by @xxx at …」等元数据",
+                  "   - 不要在文件末尾追加「原始评论」「触发评论」等引用块",
+                  "   - 不要把评论原文复制粘贴进文件",
+                  "4. 测试策略（md）：维持原章节结构，在合适章节内调整正文；顶部「更新记录」表只能追加一行，不要重写既有记录。",
+                  "5. 测试用例（py）：按评论增删 / 修改 `def test_*` 函数；新增函数命名延续既有约定（含 `_pr_<n>` 后缀以防冲突）；保留 fixtures；末尾「用例索引」注释表同步更新。",
+                  "6. 修改完成后直接结束，不要再向对话输出『我已经做了…』之类的说明。",
+                  "",
+                  "完成后停止；不要询问、不要修改其他文件。",
+              ]
+              prompt = "\n".join(prompt_lines)
+
+              print(f"::group::opencode refine prompt for module={module}")
+              print(prompt)
+              print("::endgroup::", flush=True)
+
+              cmd = [
+                  "opencode", "run",
+                  "--model", os.environ.get("OPENCODE_MODEL", "alibaba-cn/glm-5"),
+                  "--agent", "build",
+                  "--dangerously-skip-permissions",
+                  "--thinking=false",
+                  prompt,
+              ]
+              r = subprocess.run(cmd, text=True)
+              if r.returncode != 0:
+                  print(f"::error::opencode exited {r.returncode} for module={module}", file=sys.stderr)
+                  sys.exit(r.returncode)
+
+              print(f"::notice::refined module={module}")
+          PY
+
+      - name: Commit and push to PR branch
+        id: push
+        if: steps.files.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Defensive: re-embed org PAT in origin URL (persisted credentials
+          # from actions/checkout can be lost between steps on self-hosted runners).
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          while IFS= read -r f; do
+            [ -f "$f" ] && git add -- "$f"
+          done < target-files.txt
+          if git diff --cached --quiet; then
+            echo "No effective changes; skipping push."
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "docs(test): refine via comment ${COMMENT_ID} on PR #${PR_NUM}"
+          git push
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Final reaction
+        if: always() && needs.gate.outputs.mode == 'refine' && needs.gate.outputs.head_repo == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          PUSHED: ${{ steps.push.outputs.pushed }}
+        run: |
+          if [ "$PUSHED" = "true" ]; then
+            REACT=rocket
+          else
+            REACT=confused
+          fi
+          gh api -X POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content="$REACT" >/dev/null
+
+      - name: Comment — refine done
+        if: needs.gate.outputs.mode == 'refine' && steps.push.outputs.pushed == 'true'
+        env:
+          # MUST stay on GITHUB_TOKEN — see "Comment — refine start" rationale.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$PR_NUM" --repo "$REPO" --body "🚀 \`测试集成修复\` 已完成 — 根据评论的修订已追加为新 commit，请再次 review。
+
+          - 触发评论：${COMMENT_URL}
+          - run 日志：${RUN_URL}
+
+          继续评论可多轮迭代；评论 \`/accept\` 转为正式 PR。" || true
+
+      - name: Comment — failure
+        if: failure()
+        env:
+          # MUST stay on GITHUB_TOKEN — see "Comment — refine start" rationale.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$PR_NUM" --repo "$REPO" --body "❌ \`测试集成修复\` 执行异常，详见 [run 日志](${RUN_URL})。请检查后重新评论触发，或在 Actions 页面 re-run。" || true
