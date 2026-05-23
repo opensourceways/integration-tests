@@ -5,6 +5,7 @@
 | PR 号 | issue 列表 | 合入时间 | 说明 |
 |-------|------------|----------|------|
 | [#133](https://github.com/agentic-develop-playground/backlog/pull/133) | 5 | 2026-05-23 | 会议参会者列表 API 测试策略 |
+| [#167](https://github.com/agentic-develop-playground/backlog/pull/167) | 5 | 2026-05-23 | 会议参会者列表 API 测试策略（合并 issue #5 交付件） |
 
 ---
 

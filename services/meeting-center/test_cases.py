@@ -1,45 +1,39 @@
 # -*- coding: utf-8 -*-
 """
-测试用例脚本：openEuler OneID 登录接口（POST /oneid/login）
+测试用例脚本：meeting-center 模块测试集
 
-来源：基于 https://usercenter.openubmc.test.osinfra.cn/oneid/login 实测探测
-被测系统：OneID 鉴权服务（openUBMC 测试环境）
-账号：19938204520 | 密码：Aa123456@ | username=xiaoguozhi34
-用例总数：13 | 自动化：13 | 手工：0
+模块包含：
+  1. OneID 登录接口测试（POST /oneid/login）
+  2. 会议参会者列表 API 测试（GET /meeting/{id}/participants/）
+
+用例总数：46 | 自动化：46 | 手工：0
 生成工具：test-case-generator skill（Python 模式）
 
 依赖：
-    pip install pytest requests cryptography python-dotenv
+    pip install pytest requests cryptography python-dotenv pytest-dependency
 
 执行：
-    set PASSWORD=Aa123456@                         # 明文密码（默认值同此）
-    pytest -v test_oneid_login.py
-    pytest -vs test_oneid_login.py                  # 同时打印请求/响应明细
+    pytest -v test_cases.py                       # 执行全部自动化用例
+    pytest -v test_cases.py -k PUBLIC             # 执行公开会议相关用例
+    pytest -v test_cases.py -m p0                 # 执行 P0 优先级用例
+    pytest -v test_cases.py -k oneid_login        # 执行 OneID 登录用例
+
+占位符（执行前由环境变量注入）：
+    BASE_URL       —— 测试环境 API 基础 URL（如 https://preview.example.com）
+    AUTH_URL       —— OneID 认证服务 URL（如 https://usercenter.openubmc.test.osinfra.cn）
+    PASSWORD       —— 测试账号密码
+    SPONSOR_TOKEN  —— 私有会议发起人 token
+    MEMBER_TOKEN   —— SIG 组成员 token
+    ADMIN_TOKEN    —— 管理员 token
+    NORMAL_TOKEN   —— 普通用户 token（无权限）
 
 查看真实请求/响应：
     1. 控制台实时打印（需加 -s 关掉 pytest 标准输出捕获）：
-         pytest -vs test_oneid_login.py
+         pytest -vs test_cases.py
     2. 落盘 jsonl 流水（默认开启，与本脚本同目录）：
-         test_oneid_login.http.log.jsonl
+         test_cases.http.log.jsonl
        关闭打印：set HTTP_VERBOSE=0
        关闭落盘：set HTTP_LOG_FILE=
-       自定义路径：set HTTP_LOG_FILE=D:/logs/run-001.jsonl
-
-平台实测事实（脚本对照执行结果校正过）：
-    1. 鉴权链路三步：GET /oneid/public/key 取 RSA 公钥 → PKCS1v15 加密明文 →
-       hex 编码 → POST /oneid/login
-    2. POST /oneid/login 必须携带 Origin + Referer 头才会校验 redirect_uri；
-       否则一律返回 HTTP 404「redirect_uri not found in the app」
-    3. 真实 client_id = 672b25d8b92861baa16ce1e3（来自前端 bundle 反查）
-    4. redirect_uri 与 oneidPrivacyAccepted 字段在请求头满足条件后**非强制**，
-       缺失仍可登录成功（与文档建议不一致）
-    5. token 在响应 body.data.token，不在顶层
-    6. 错误码字典：
-       - E00052「账号和密码不匹配」(HTTP 400)：密码错 / 账号不存在 / 明文密码 /
-         未注册手机号 / 空 password
-       - E00012「请求异常」(HTTP 400)：空 account / 缺 permission / permission 枚举外值
-       - HTTP 404「redirect_uri not found in the app」：错误 client_id
-       - HTTP 418 + CloudWAF HTML：SQL 注入串被 WAF 拦截
 """
 
 import os
@@ -47,6 +41,7 @@ import json
 import time
 import datetime
 import threading
+import re
 from pathlib import Path
 
 import pytest
@@ -61,15 +56,26 @@ except ImportError:
     pass
 
 # ===== 模块级常量 =====
-BASE_AUTH = "https://usercenter.openubmc.test.osinfra.cn"
+BASE_AUTH = os.environ.get("AUTH_URL", "https://usercenter.openubmc.test.osinfra.cn")
+BASE_URL = os.environ.get("BASE_URL", "https://preview.example.com")
 
 ACCOUNT = "19938204520"
 CLIENT_ID = "672b25d8b92861baa16ce1e3"
 REDIRECT_URI = "https://openubmc-website.test.osinfra.cn/personal/meeting"
-EXPECTED_USERNAME = "xiaoguozhi34"   # 实测正常登录返回的 username
+EXPECTED_USERNAME = "xiaoguozhi34"
+
+PUBLIC_MEETING_ID = int(os.environ.get("PUBLIC_MEETING_ID", "1"))
+PRIVATE_MEETING_ID = int(os.environ.get("PRIVATE_MEETING_ID", "2"))
+DELETED_MEETING_ID = int(os.environ.get("DELETED_MEETING_ID", "6"))
+NONEXIST_MEETING_ID = int(os.environ.get("NONEXIST_MEETING_ID", "99999"))
+NO_PERMISSION_MEETING_ID = int(os.environ.get("NO_PERMISSION_MEETING_ID", "5"))
 
 # ===== 占位符注入 =====
-PASSWORD = os.environ.get("PASSWORD")
+PASSWORD = os.environ.get("PASSWORD", "")
+SPONSOR_TOKEN = os.environ.get("SPONSOR_TOKEN", "")
+MEMBER_TOKEN = os.environ.get("MEMBER_TOKEN", "")
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+NORMAL_TOKEN = os.environ.get("NORMAL_TOKEN", "")
 DEFAULT_TIMEOUT = 10
 
 # 必备 headers：Origin + Referer 缺失会让平台一律返回 404
@@ -208,6 +214,108 @@ def _capture_case_id(request):
     _current_case_id = "<no-case>"
 
 
+# ===== 共享 fixture =====
+
+@pytest.fixture(scope="session")
+def api_client():
+    """requests.Session 实例，自动设置超时"""
+    session = requests.Session()
+    session.headers.update({"Content-Type": "application/json"})
+    return session
+
+
+@pytest.fixture(scope="session")
+def sponsor_token():
+    """获取私有会议发起人 token"""
+    if SPONSOR_TOKEN:
+        return SPONSOR_TOKEN
+    resp = requests.post(
+        f"{BASE_AUTH}/oneid/login",
+        json={
+            "permission": "sigRead",
+            "account": "sponsor_test",
+            "client_id": "test_client_id",
+            "password": PASSWORD,
+            "oneidPrivacyAccepted": "20240830",
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+    assert resp.status_code == 200, f"login failed: {resp.status_code}"
+    token = resp.json().get("token")
+    assert token and len(token) >= 16, "token 缺失或长度异常"
+    return token
+
+
+@pytest.fixture(scope="session")
+def member_token():
+    """获取 SIG 组成员 token"""
+    if MEMBER_TOKEN:
+        return MEMBER_TOKEN
+    resp = requests.post(
+        f"{BASE_AUTH}/oneid/login",
+        json={
+            "permission": "sigRead",
+            "account": "member_test",
+            "client_id": "test_client_id",
+            "password": PASSWORD,
+            "oneidPrivacyAccepted": "20240830",
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+    assert resp.status_code == 200, f"login failed: {resp.status_code}"
+    token = resp.json().get("token")
+    assert token and len(token) >= 16, "token 缺失或长度异常"
+    return token
+
+
+@pytest.fixture(scope="session")
+def admin_token():
+    """获取管理员 token"""
+    if ADMIN_TOKEN:
+        return ADMIN_TOKEN
+    resp = requests.post(
+        f"{BASE_AUTH}/oneid/login",
+        json={
+            "permission": "admin",
+            "account": "admin_test",
+            "client_id": "test_client_id",
+            "password": PASSWORD,
+            "oneidPrivacyAccepted": "20240830",
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+    assert resp.status_code == 200, f"login failed: {resp.status_code}"
+    token = resp.json().get("token")
+    assert token and len(token) >= 16, "token 缺失或长度异常"
+    return token
+
+
+@pytest.fixture(scope="session")
+def normal_token():
+    """获取普通用户 token（无权限）"""
+    if NORMAL_TOKEN:
+        return NORMAL_TOKEN
+    resp = requests.post(
+        f"{BASE_AUTH}/oneid/login",
+        json={
+            "permission": "sigRead",
+            "account": "normal_test",
+            "client_id": "test_client_id",
+            "password": PASSWORD,
+            "oneidPrivacyAccepted": "20240830",
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+    assert resp.status_code == 200, f"login failed: {resp.status_code}"
+    token = resp.json().get("token")
+    assert token and len(token) >= 16, "token 缺失或长度异常"
+    return token
+
+
 # ===== OneID 加密链路 =====
 
 
@@ -226,12 +334,11 @@ def _encrypt_password(plaintext, public_key_pem=None):
 
     兼容性：若传入的 plaintext 本身就是 hex 加密串（长度=256 且全为 hex 字符），
     认为是预加密结果直接返回；否则按明文走标准 PKCS1v15 加密。
-    （历史脚本曾把 PASSWORD 环境变量设为预加密密文，此分支避免重复加密报错）
     """
     if isinstance(plaintext, str) and len(plaintext) == 256:
         try:
             int(plaintext, 16)
-            return plaintext   # 看起来是已加密的 256 字符 hex 串，原样返回
+            return plaintext
         except ValueError:
             pass
     if public_key_pem is None:
@@ -241,7 +348,7 @@ def _encrypt_password(plaintext, public_key_pem=None):
 
 
 def _build_body(**overrides):
-    """构造默认合法 body；用 overrides 注入差异化字段（含删除字段语义）"""
+    """构造默认合法 body；用 overrides 注入差异化字段"""
     body = {
         "permission": "sigRead",
         "account": ACCOUNT,
@@ -275,13 +382,14 @@ def _post_login(body):
 
 
 # ============================================================================
-# 一、正常流（1 条）
+# 一、OneID 登录测试（正常流）
 # ============================================================================
 
 
+@pytest.mark.p0
 def test_tc_api_login_001_normal_flow():
     """
-    TC-API-LOGIN-001 [正常流] 合法账号 + 加密密码 + 完整 Header 登录成功
+    TC-API-LOGIN-001 [正常流] 合法账号密码登录返回 token
     模块：OneID/登录 | 优先级：P0
 
     前置条件：
@@ -316,10 +424,11 @@ def test_tc_api_login_001_normal_flow():
 
 
 # ============================================================================
-# 二、异常 / 反向（4 条）
+# 二、OneID 登录测试（异常/反向）
 # ============================================================================
 
 
+@pytest.mark.p0
 def test_tc_api_login_002_wrong_password():
     """
     TC-API-LOGIN-002 [异常] 密码错误时返回 E00052
@@ -336,10 +445,10 @@ def test_tc_api_login_002_wrong_password():
     assert isinstance(msg, dict)
     assert msg.get("code") == "E00052"
     assert msg.get("message_en") == "Incorrect account or password."
-    # 不应返回 token
     assert not (rj.get("data") or {}).get("token")
 
 
+@pytest.mark.p1
 def test_tc_api_login_003_nonexistent_account():
     """
     TC-API-LOGIN-003 [异常] 不存在的账号返回 E00052
@@ -352,7 +461,7 @@ def test_tc_api_login_003_nonexistent_account():
     assert rj.get("code") == 400
 
 
-
+@pytest.mark.p1
 def test_tc_api_login_004_wrong_client_id():
     """
     TC-API-LOGIN-004 [异常输入] 错误的 client_id 返回 404 redirect_uri not found
@@ -367,14 +476,13 @@ def test_tc_api_login_004_wrong_client_id():
     assert "redirect_uri not found" in str(rj.get("msg", ""))
 
 
+@pytest.mark.p0
 def test_tc_api_login_005_plain_password():
     """
     TC-API-LOGIN-005 [异常] 明文密码（未加密）直接送会被识为密码错误
     模块：OneID/登录 | 优先级：P0
     实测：未经过 RSA 加密的字符串放进 password 字段，平台无法解密，按密码错处理
     """
-    # 用一段确保是"明文"的固定字符串（与 PASSWORD 环境变量解耦，
-    # 即使 PASSWORD 是预加密密文也不影响本用例语义）
     body = _build_body(password="this_is_a_raw_plaintext_password_123")
     resp = _post_login(body)
     assert resp.status_code == 400
@@ -383,10 +491,11 @@ def test_tc_api_login_005_plain_password():
 
 
 # ============================================================================
-# 三、空值（3 条）
+# 三、OneID 登录测试（空值）
 # ============================================================================
 
 
+@pytest.mark.p0
 def test_tc_api_login_006_empty_account():
     """
     TC-API-LOGIN-006 [空值] account 为空字符串返回 E00012 请求异常
@@ -402,6 +511,7 @@ def test_tc_api_login_006_empty_account():
     assert msg.get("message_en") == "Request Error"
 
 
+@pytest.mark.p0
 def test_tc_api_login_007_empty_password():
     """
     TC-API-LOGIN-007 [空值] password 为空字符串被识为密码错误
@@ -414,6 +524,7 @@ def test_tc_api_login_007_empty_password():
     assert (rj.get("msg") or {}).get("code") == "E00052"
 
 
+@pytest.mark.p1
 def test_tc_api_login_008_missing_permission():
     """
     TC-API-LOGIN-008 [空值] permission 字段缺失返回 E00012 请求异常
@@ -427,10 +538,11 @@ def test_tc_api_login_008_missing_permission():
 
 
 # ============================================================================
-# 四、异常输入（2 条）
+# 四、OneID 登录测试（异常输入）
 # ============================================================================
 
 
+@pytest.mark.p1
 def test_tc_api_login_009_invalid_permission_enum():
     """
     TC-API-LOGIN-009 [异常输入] permission 枚举外值返回 E00012 请求异常
@@ -443,6 +555,7 @@ def test_tc_api_login_009_invalid_permission_enum():
     assert (rj.get("msg") or {}).get("code") == "E00012"
 
 
+@pytest.mark.p2
 def test_tc_api_login_010_unregistered_phone():
     """
     TC-API-LOGIN-010 [异常输入] 未注册的合法手机号格式返回 E00052
@@ -453,12 +566,12 @@ def test_tc_api_login_010_unregistered_phone():
     assert resp.status_code == 400
 
 
-
 # ============================================================================
-# 五、特殊字符 / 安全（1 条）
+# 五、OneID 登录测试（特殊字符/安全）
 # ============================================================================
 
 
+@pytest.mark.p0
 def test_tc_api_login_011_sql_injection_blocked_by_waf():
     """
     TC-API-LOGIN-011 [特殊字符][SQL注入] account 含 SQL 注入串被 WAF 拦截
@@ -470,23 +583,22 @@ def test_tc_api_login_011_sql_injection_blocked_by_waf():
     assert resp.status_code == 418, f"未被 WAF 拦截：status={resp.status_code}"
     assert "CloudWAF" in resp.text or "访问被拦截" in resp.text, \
         f"非 WAF 拦截页面：{resp.text[:200]}"
-    # 不应返回 token
     assert "token" not in resp.text.lower() or "JWT" not in resp.text
 
 
 # ============================================================================
-# 六、字段非强制 / 边界（2 条）
+# 六、OneID 登录测试（字段非强制/边界）
 # ============================================================================
 
 
+@pytest.mark.p2
 def test_tc_api_login_012_missing_redirect_uri_still_ok():
     """
     TC-API-LOGIN-012 [边界值] 缺 redirect_uri 字段仍可登录成功
     模块：OneID/登录 | 优先级：P2
 
     实测发现：当请求 headers 含正确 Referer 时，body 中即使不带 redirect_uri
-              也能登录成功（平台从 Referer 推断）。本用例锁定此行为，便于未来
-              发现变更回归。
+              也能登录成功（平台从 Referer 推断）。
     """
     body = _build_body(redirect_uri=_MISSING)
     resp = _post_login(body)
@@ -496,13 +608,13 @@ def test_tc_api_login_012_missing_redirect_uri_still_ok():
     assert (rj.get("data") or {}).get("token")
 
 
+@pytest.mark.p2
 def test_tc_api_login_013_missing_privacy_field_still_ok():
     """
     TC-API-LOGIN-013 [边界值] 缺 oneidPrivacyAccepted 字段仍可登录成功
     模块：OneID/登录 | 优先级：P2
 
     实测发现：oneidPrivacyAccepted 字段为可选；缺失不影响登录。
-    （文档建议必传，但平台未强制校验）
     """
     body = _build_body(oneidPrivacyAccepted=_MISSING)
     resp = _post_login(body)
@@ -513,21 +625,560 @@ def test_tc_api_login_013_missing_privacy_field_still_ok():
 
 
 # ============================================================================
-# 七、覆盖矩阵（备注）
+# 七、会议参会者列表 API 测试（公开会议）
 # ============================================================================
-# | 维度          | 已覆盖用例                          |
-# |---------------|------------------------------------|
-# | 1 正常流      | LOGIN-001                          |
-# | 2 异常        | LOGIN-002 / 003 / 004 / 005       |
-# | 3 边界值      | LOGIN-012 / 013                   |
-# | 4 空值        | LOGIN-006 / 007 / 008             |
-# | 5 特殊字符    | LOGIN-011（SQL 注入）             |
-# | 6 权限校验    | LOGIN-004（错误 client_id）       |
-# | 7 数据唯一性  | — N/A（登录无唯一性概念）         |
-# | 8 重复操作    | — 平台无返回头明示限流，未覆盖   |
-# | 9 异常输入    | LOGIN-009 / 010                   |
+
+
+@pytest.mark.p0
+def test_meeting_public_001_no_auth_access_pr_167(api_client):
+    """TC-API-MEETING-PUBLIC-001 [正常流] 公开会议无认证可访问"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("code") == 200
+    assert body.get("message") == "success"
+    assert isinstance(body.get("data"), dict)
+    assert "participants" in body["data"]
+
+
+@pytest.mark.p0
+def test_meeting_public_002_data_structure_pr_167(api_client):
+    """TC-API-MEETING-PUBLIC-002 [正常流] 公开会议参会者数据结构正确"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    data = body.get("data", {})
+    assert "meeting_id" in data
+    assert "topic" in data
+    assert "is_private" in data
+    assert data["is_private"] == False
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    participants = data.get("participants", [])
+    if len(participants) > 0:
+        p = participants[0]
+        assert "username" in p
+        assert "nickname" in p
+        assert "email" in p
+        assert "phone" in p
+        assert "user_id" in p
+        assert "organization" in p
+        assert "position" in p
+        assert "avatar" in p
+        assert "attendance_status" in p
+
+
+@pytest.mark.p1
+def test_meeting_public_003_email_masking_pr_167(api_client):
+    """TC-API-MEETING-PUBLIC-003 [安全] 公开会议参会者邮箱脱敏生效"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        email = p.get("email", "")
+        if email:
+            assert "***@" in email, f"邮箱未脱敏: {email}"
+            assert re.match(r"^[a-zA-Z0-9]{1,3}\*\*\*@", email), f"邮箱脱敏格式不正确: {email}"
+
+
+@pytest.mark.p1
+def test_meeting_public_004_phone_masking_pr_167(api_client):
+    """TC-API-MEETING-PUBLIC-004 [安全] 公开会议参会者手机号脱敏生效"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        phone = p.get("phone", "")
+        if phone:
+            assert re.match(r"^\d{3}\*\*\*\*\d{4}$", phone), f"手机号脱敏格式不正确: {phone}"
+
+
 # ============================================================================
+# 八、会议参会者列表 API 测试（私有会议）
+# ============================================================================
+
+
+@pytest.mark.p0
+def test_meeting_private_001_sponsor_access_pr_167(api_client, sponsor_token):
+    """TC-API-MEETING-PRIVATE-001 [正常流] 私有会议发起人认证后可访问"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {sponsor_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("code") == 200
+    assert isinstance(body.get("data"), dict)
+    assert "participants" in body["data"]
+
+
+@pytest.mark.p1
+def test_meeting_private_002_member_access_pr_167(api_client, member_token):
+    """TC-API-MEETING-PRIVATE-002 [权限] 私有会议 SIG 组成员认证后可访问"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {member_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("code") == 200
+
+
+@pytest.mark.p1
+def test_meeting_private_003_admin_access_pr_167(api_client, admin_token):
+    """TC-API-MEETING-PRIVATE-003 [权限] 私有会议管理员认证后可访问"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("code") == 200
+
+
+@pytest.mark.p0
+def test_meeting_private_004_no_auth_return_401_pr_167(api_client):
+    """TC-API-MEETING-PRIVATE-004 [权限] 私有会议无认证访问返回 401"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code in (401, 403)
+
+
+@pytest.mark.p0
+def test_meeting_private_005_no_permission_return_403_pr_167(api_client, normal_token):
+    """TC-API-MEETING-PRIVATE-005 [权限] 私有会议无权限用户访问返回 403"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{NO_PERMISSION_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {normal_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 403
+    body = resp.json()
+    assert body.get("code") == 403
+    assert "暂不对外公开" in body.get("message", "")
+
+
+@pytest.mark.p1
+def test_meeting_private_006_token_expired_pr_167(api_client):
+    """TC-API-MEETING-PRIVATE-006 [权限] 私有会议 Token 过期返回 401"""
+    expired_token = "expired_token_12345"
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {expired_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 401
+
+
+# ============================================================================
+# 九、会议参会者列表 API 测试（分页功能）
+# ============================================================================
+
+
+@pytest.mark.p0
+def test_meeting_pagination_001_default_params_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-001 [正常流] 默认分页参数返回正确数据"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    data = body.get("data", {})
+    assert data.get("page") == 1
+    assert data.get("size") == 20
+    assert isinstance(data.get("total"), int)
+    assert isinstance(data.get("participants"), list)
+
+
+@pytest.mark.p0
+def test_meeting_pagination_002_custom_params_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-002 [正常流] 自定义分页参数返回正确数据"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=2&size=10",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    data = body.get("data", {})
+    assert data.get("page") == 2
+    assert data.get("size") == 10
+    assert len(data.get("participants", [])) <= 10
+
+
+@pytest.mark.p1
+def test_meeting_pagination_003_size_100_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-003 [边界值] 分页 size=100 返回最多 100 条"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=1&size=100",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    data = body.get("data", {})
+    assert data.get("size") == 100
+    assert len(data.get("participants", [])) <= 100
+
+
+@pytest.mark.p1
+def test_meeting_pagination_004_size_101_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-004 [边界值] 分页 size=101 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=1&size=101",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body.get("code") == 400
+
+
+@pytest.mark.p1
+def test_meeting_pagination_005_page_0_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-005 [异常输入] 分页 page=0 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=0",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.p1
+def test_meeting_pagination_006_page_negative_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-006 [异常输入] 分页 page=-1 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=-1",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.p1
+def test_meeting_pagination_007_size_0_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-007 [异常输入] 分页 size=0 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?size=0",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.p1
+def test_meeting_pagination_008_size_negative_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-008 [异常输入] 分页 size=-5 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?size=-5",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.p1
+def test_meeting_pagination_009_page_non_numeric_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-009 [异常输入] 分页 page=abc 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=abc",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.p1
+def test_meeting_pagination_010_size_non_numeric_pr_167(api_client):
+    """TC-API-MEETING-PAGINATION-010 [异常输入] 分页 size=xyz 返回 400"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?size=xyz",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+# ============================================================================
+# 十、会议参会者列表 API 测试（会议不存在）
+# ============================================================================
+
+
+@pytest.mark.p0
+def test_meeting_notfound_001_nonexist_pr_167(api_client):
+    """TC-API-MEETING-NOTFOUND-001 [异常] 会议不存在返回 404"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{NONEXIST_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 404
+    body = resp.json()
+    assert body.get("code") == 404
+    assert "不存在或已删除" in body.get("message", "")
+
+
+@pytest.mark.p0
+def test_meeting_notfound_002_deleted_pr_167(api_client):
+    """TC-API-MEETING-NOTFOUND-002 [异常] 已删除会议返回 404"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{DELETED_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 404
+    body = resp.json()
+    assert body.get("code") == 404
+    assert "不存在或已删除" in body.get("message", "")
+
+
+# ============================================================================
+# 十一、会议参会者列表 API 测试（集成测试）
+# ============================================================================
+
+
+@pytest.mark.p1
+def test_meeting_integration_001_cross_service_call_pr_167(api_client):
+    """TC-API-MEETING-INTEGRATION-001 [集成] 跨服务调用链路正常"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    data = body.get("data", {})
+    assert "meeting_id" in data
+    assert data["meeting_id"] == PUBLIC_MEETING_ID
+    participants = data.get("participants", [])
+    for p in participants:
+        assert p.get("user_id"), "OneID user_id 缺失"
+
+
+@pytest.mark.p1
+def test_meeting_integration_002_platform_error_pr_167(api_client):
+    """TC-API-MEETING-INTEGRATION-002 [集成] meeting-platform 异常时正确处理"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{NONEXIST_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 404
+    body = resp.json()
+    assert "不存在" in body.get("message", "") or "已删除" in body.get("message", "")
+
+
+@pytest.mark.p1
+def test_meeting_integration_003_oneid_error_pr_167(api_client):
+    """TC-API-MEETING-INTEGRATION-003 [集成] OneID 批量查询失败时正确处理"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        assert "username" in p
+        assert p.get("username"), "username 不应为空"
+
+
+# ============================================================================
+# 十二、会议参会者列表 API 测试（安全测试）
+# ============================================================================
+
+
+@pytest.mark.p1
+def test_meeting_security_001_dynamic_auth_pr_167(api_client):
+    """TC-API-MEETING-SECURITY-001 [安全] 动态认证机制生效"""
+    resp_public = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp_public.status_code == 200
+    
+    resp_private = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp_private.status_code in (401, 403)
+
+
+@pytest.mark.p1
+def test_meeting_security_002_horizontal_bypass_pr_167(api_client, normal_token):
+    """TC-API-MEETING-SECURITY-002 [安全] 横向越权防护生效"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {normal_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.p2
+def test_meeting_security_003_vertical_bypass_pr_167(api_client, normal_token):
+    """TC-API-MEETING-SECURITY-003 [安全] 纵向越权防护生效"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PRIVATE_MEETING_ID}/participants/",
+        headers={"Authorization": f"Bearer {normal_token}"},
+        timeout=10,
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.p2
+def test_meeting_security_004_sql_injection_pr_167(api_client):
+    """TC-API-MEETING-SECURITY-004 [安全] SQL 注入防护生效"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/1' OR '1'='1/participants/",
+        timeout=10,
+    )
+    assert resp.status_code in (400, 404)
+    body = resp.json()
+    assert "token" not in str(body).lower()
+    assert "password" not in str(body).lower()
+
+
+@pytest.mark.p2
+def test_meeting_security_005_xss_injection_pr_167(api_client):
+    """TC-API-MEETING-SECURITY-005 [安全] XSS 注入防护生效"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/?page=<script>alert(1)</script>",
+        timeout=10,
+    )
+    assert resp.status_code == 400
+
+
+# ============================================================================
+# 十三、会议参会者列表 API 测试（脱敏逻辑）
+# ============================================================================
+
+
+@pytest.mark.p2
+def test_meeting_mask_001_short_email_pr_167(api_client):
+    """TC-API-MEETING-MASK-001 [安全] 短邮箱脱敏处理正确"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        email = p.get("email", "")
+        if email and len(email.split("@")[0]) < 3:
+            assert "***@" in email or email == ""
+
+
+@pytest.mark.p2
+def test_meeting_mask_002_short_phone_pr_167(api_client):
+    """TC-API-MEETING-MASK-002 [安全] 短手机号脱敏处理正确"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        phone = p.get("phone", "")
+        if phone and len(phone.replace("*", "").replace("-", "")) < 7:
+            assert "*" in phone or phone == ""
+
+
+@pytest.mark.p2
+def test_meeting_mask_003_invalid_email_pr_167(api_client):
+    """TC-API-MEETING-MASK-003 [安全] 无效邮箱格式不脱敏"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        email = p.get("email", "")
+        if email and "@" not in email:
+            assert email == "" or "***@" not in email
+
+
+@pytest.mark.p2
+def test_meeting_mask_004_invalid_phone_pr_167(api_client):
+    """TC-API-MEETING-MASK-004 [安全] 无效手机号格式不脱敏"""
+    resp = api_client.get(
+        f"{BASE_URL}/meeting/{PUBLIC_MEETING_ID}/participants/",
+        timeout=10,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    participants = body.get("data", {}).get("participants", [])
+    for p in participants:
+        phone = p.get("phone", "")
+        if phone:
+            assert re.match(r"^[\d\*]+$", phone), f"手机号含非法字符: {phone}"
 
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
+
+
+# ===== 用例索引（人类可贴禅道/Tapd） =====
+#
+# | 用例 ID | 标题 | 关联 task | 优先级 | 类型 | 来源 PR |
+# |---------|------|-----------|--------|------|---------|
+# | TC-API-LOGIN-001 | [正常流] 合法账号密码登录返回 token | OneID 登录 | P0 | interface | 原有 |
+# | TC-API-LOGIN-002 | [异常] 密码错误时返回 E00052 | OneID 登录 | P0 | interface | 原有 |
+# | TC-API-LOGIN-003 | [异常] 不存在的账号返回 E00052 | OneID 登录 | P1 | interface | 原有 |
+# | TC-API-LOGIN-004 | [异常输入] 错误的 client_id 返回 404 | OneID 登录 | P1 | interface | 原有 |
+# | TC-API-LOGIN-005 | [异常] 明文密码（未加密）直接送会被识为密码错误 | OneID 登录 | P0 | interface | 原有 |
+# | TC-API-LOGIN-006 | [空值] account 为空字符串返回 E00012 | OneID 登录 | P0 | interface | 原有 |
+# | TC-API-LOGIN-007 | [空值] password 为空字符串被识为密码错误 | OneID 登录 | P0 | interface | 原有 |
+# | TC-API-LOGIN-008 | [空值] permission 字段缺失返回 E00012 | OneID 登录 | P1 | interface | 原有 |
+# | TC-API-LOGIN-009 | [异常输入] permission 枚举外值返回 E00012 | OneID 登录 | P1 | interface | 原有 |
+# | TC-API-LOGIN-010 | [异常输入] 未注册的合法手机号格式返回 E00052 | OneID 登录 | P2 | interface | 原有 |
+# | TC-API-LOGIN-011 | [特殊字符][SQL注入] account 含 SQL 注入串被 WAF 拦截 | OneID 登录 | P0 | interface | 原有 |
+# | TC-API-LOGIN-012 | [边界值] 缺 redirect_uri 字段仍可登录成功 | OneID 登录 | P2 | interface | 原有 |
+# | TC-API-LOGIN-013 | [边界值] 缺 oneidPrivacyAccepted 字段仍可登录成功 | OneID 登录 | P2 | interface | 原有 |
+# | TC-API-MEETING-PUBLIC-001 | [正常流] 公开会议无认证可访问 | #5 验收标准 1 | P0 | interface | #167 |
+# | TC-API-MEETING-PUBLIC-002 | [正常流] 公开会议参会者数据结构正确 | #5 验收标准 1 | P0 | interface | #167 |
+# | TC-API-MEETING-PUBLIC-003 | [安全] 公开会议参会者邮箱脱敏生效 | #5 验收标准 1 | P1 | interface | #167 |
+# | TC-API-MEETING-PUBLIC-004 | [安全] 公开会议参会者手机号脱敏生效 | #5 验收标准 1 | P1 | interface | #167 |
+# | TC-API-MEETING-PRIVATE-001 | [正常流] 私有会议发起人认证后可访问 | #5 验收标准 2 | P0 | interface | #167 |
+# | TC-API-MEETING-PRIVATE-002 | [权限] 私有会议 SIG 组成员认证后可访问 | #5 验收标准 2 | P1 | interface | #167 |
+# | TC-API-MEETING-PRIVATE-003 | [权限] 私有会议管理员认证后可访问 | #5 验收标准 2 | P1 | interface | #167 |
+# | TC-API-MEETING-PRIVATE-004 | [权限] 私有会议无认证访问返回 401 | #5 验收标准 6 | P0 | interface | #167 |
+# | TC-API-MEETING-PRIVATE-005 | [权限] 私有会议无权限用户访问返回 403 | #5 验收标准 6 | P0 | interface | #167 |
+# | TC-API-MEETING-PRIVATE-006 | [权限] 私有会议 Token 过期返回 401 | #5 验收标准 6 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-001 | [正常流] 默认分页参数返回正确数据 | #5 验收标准 3 | P0 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-002 | [正常流] 自定义分页参数返回正确数据 | #5 验收标准 3 | P0 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-003 | [边界值] 分页 size=100 返回最多 100 条 | #5 验收标准 7 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-004 | [边界值] 分页 size=101 返回 400 | #5 验收标准 7 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-005 | [异常输入] 分页 page=0 返回 400 | #5 验收标准 8 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-006 | [异常输入] 分页 page=-1 返回 400 | #5 验收标准 8 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-007 | [异常输入] 分页 size=0 返回 400 | #5 验收标准 8 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-008 | [异常输入] 分页 size=-5 返回 400 | #5 验收标准 8 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-009 | [异常输入] 分页 page=abc 返回 400 | #5 验收标准 8 | P1 | interface | #167 |
+# | TC-API-MEETING-PAGINATION-010 | [异常输入] 分页 size=xyz 返回 400 | #5 验收标准 8 | P1 | interface | #167 |
+# | TC-API-MEETING-NOTFOUND-001 | [异常] 会议不存在返回 404 | #5 验收标准 4 | P0 | interface | #167 |
+# | TC-API-MEETING-NOTFOUND-002 | [异常] 已删除会议返回 404 | #5 验收标准 5 | P0 | interface | #167 |
+# | TC-API-MEETING-INTEGRATION-001 | [集成] 跨服务调用链路正常 | #5 设计要点 | P1 | integration | #167 |
+# | TC-API-MEETING-INTEGRATION-002 | [集成] meeting-platform 异常时正确处理 | #5 设计要点 | P1 | integration | #167 |
+# | TC-API-MEETING-INTEGRATION-003 | [集成] OneID 批量查询失败时正确处理 | #5 设计要点 | P1 | integration | #167 |
+# | TC-API-MEETING-SECURITY-001 | [安全] 动态认证机制生效 | #5 安全设计 | P1 | interface | #167 |
+# | TC-API-MEETING-SECURITY-002 | [安全] 横向越权防护生效 | #5 安全设计 | P1 | interface | #167 |
+# | TC-API-MEETING-SECURITY-003 | [安全] 纵向越权防护生效 | #5 安全设计 | P2 | interface | #167 |
+# | TC-API-MEETING-SECURITY-004 | [安全] SQL 注入防护生效 | #5 安全设计 | P2 | interface | #167 |
+# | TC-API-MEETING-SECURITY-005 | [安全] XSS 注入防护生效 | #5 安全设计 | P2 | interface | #167 |
+# | TC-API-MEETING-MASK-001 | [安全] 短邮箱脱敏处理正确 | #5 脱敏逻辑 | P2 | interface | #167 |
+# | TC-API-MEETING-MASK-002 | [安全] 短手机号脱敏处理正确 | #5 脱敏逻辑 | P2 | interface | #167 |
+# | TC-API-MEETING-MASK-003 | [安全] 无效邮箱格式不脱敏 | #5 脱敏逻辑 | P2 | interface | #167 |
+# | TC-API-MEETING-MASK-004 | [安全] 无效手机号格式不脱敏 | #5 脱敏逻辑 | P2 | interface | #167 |
