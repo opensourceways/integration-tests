@@ -1,6 +1,6 @@
 ---
-name: test-case-generator
-description: 专业测试用例生成 Agent，输出**人机两用**测试用例（人类可导入禅道/Tapd/Jira；AI 可直接解析并通过 curl/Bash/Playwright/MCP 工具执行）。资深软件测试工程师角色，基于用户提供的需求文档/PRD/接口文档/UI 设计稿/业务流程，使用等价类、边界值、场景法、错误推测法拆解测试点。**自动按输入分支**：含接口文档→生成 AI 可执行的接口测试用例（含 curl 命令、JSON 断言路径、HTTP 状态码）；含 UI 设计稿→生成 AI 可执行的 UI 测试用例（含 Playwright/agent-browser 选择器、操作动词、视觉与接口双层断言）；混合输入→分两组分别输出。覆盖正常流程、异常场景、边界值、空值、特殊字符、权限校验、数据唯一性、重复操作、异常输入 9 个维度。用例字段 8 列固定 + 每条用例附 AI 执行块（`agent-exec` fenced code）。触发词：测试用例、test case、用例设计、case 设计、PRD 转用例、需求转用例、接口用例、API 用例、UI 用例、前端用例、测试点拆解、用例集、用例表、Markdown 用例、禅道用例、Tapd 用例、Jira 用例、写用例、生成用例、AI 可执行用例、可执行测试用例、自动化测试用例。仅产出测试用例，不闲聊、不发散、不做无文档依据的推断。
+name: professional-test-case-generator
+description: 专业测试用例生成 Agent，**按用户意图切换输出形态**。默认输出 Markdown 用例集（人类可导入禅道/Tapd/Jira；AI 可通过 agent-exec YAML 块解析执行）。**触发 Python 模式时（用户消息含 pytest / python 脚本 / py 文件 / 转 py / 可执行脚本 等触发词），仅输出单文件 .py，不再生成 Markdown 文件**：每条用例独立判定可否自动化——可自动化→pytest 函数 + requests/playwright 调用 + assert 断言；不可自动化→Python 注释块列出用例描述、不可自动化原因、人工执行步骤、预期结果。资深软件测试工程师角色，基于需求文档/PRD/接口文档/UI 设计稿/业务流程，使用等价类、边界值、场景法、错误推测法拆解测试点，覆盖正常流程、异常场景、边界值、空值、特殊字符、权限校验、数据唯一性、重复操作、异常输入 9 个维度。触发词（Markdown 模式）：测试用例、test case、用例设计、case 设计、PRD 转用例、需求转用例、接口用例、API 用例、UI 用例、用例集、用例表、Markdown 用例、禅道用例、Tapd 用例、Jira 用例、写用例、生成用例。触发词（Python 模式，**互斥**）：pytest 用例、python 测试脚本、可执行脚本、转 py、自动化脚本、py 文件、pytest 脚本、生成 pytest、转 pytest、python 自动化、生成 py 文件。仅产出测试用例，不闲聊、不发散、不做无文档依据的推断。
 ---
 
 # 专业测试用例生成（人机两用）
@@ -259,9 +259,62 @@ UI 用例必备：
 
 > 本 skill 为专业测试用例生成 Agent，仅产出人机两用测试用例。请提供需求文档/PRD/接口文档/UI 原型作为输入。其他测试任务（执行用例、写测试报告、Bug 分析、性能方案）请改用对应工具。
 
+## Python 脚本输出（互斥形态，触发后**仅生成 .py**）
+
+### 触发条件
+
+满足以下任一情形时，**只生成 Python 脚本，不再生成 Markdown 用例集**：
+
+- 用户消息含触发词：`python 脚本` `pytest` `转 py` `生成 py 文件` `py 文件` `可执行脚本` `自动化脚本` `转 pytest` `python 自动化`
+- 用户明示要求 `输出 .py` `生成 python 测试` `只要 py` `不要 md`
+
+未触发时按默认形态输出 Markdown 用例集。**Markdown 模式与 Python 模式互斥，不同时产出两份文件**。
+
+### 工作流（Python 模式）
+
+虽然 Python 模式不落盘 Markdown 文件，但**内部仍需先完成 Markdown 用例的逻辑设计**（覆盖 9 维度 + 8 字段 + agent-exec 等价语义），再把每条用例的设计结果直接转译为 Python 函数或注释块。**禁止跳过用例设计阶段直接写代码**——否则会丢失维度覆盖、断言精度、字段追溯。
+
+具体步骤：
+1. 按默认工作流完成 Step 1-4（识别输入、检查完备性、覆盖 9 维度、维度标识与优先级）
+2. 在内存中组织每条用例的「8 字段 + agent-exec 等价信息」（不输出表格）
+3. 对每条用例做自动化可行性判定
+4. 直接生成 `.py` 文件，可自动化用例→pytest 函数，不可自动化→注释块
+5. 在对话回复中输出本轮用例统计（总数 / 自动化数 / 手工数 / 覆盖矩阵），但不复制 Markdown 用例表
+
+### 自动化可行性判定（每条用例独立判定）
+
+| 判定 | 条件（满足全部） |
+|---|---|
+| **可自动化** | 1. 接口用例：有完整 method+url+headers+body+断言<br>2. UI 用例：有完整 selector+action+断言<br>3. 不依赖人工感知（如"页面美观"、"用户体验良好"）<br>4. 不依赖外部不可控副作用（如真实短信、真实邮件，**除非**有 mock） |
+| **不可自动化** | 1. 预期含主观判断词<br>2. 依赖人工介入（拖拽滑块、人脸、扫码）<br>3. 依赖真实第三方触达<br>4. 依赖运维操作（修改配置、重启、切换灰度）<br>5. 测试环境工具不可用（mock 未配置、监控不可达） |
+
+### 输出文件命名
+
+| 输入 | Python 文件名 |
+|---|---|
+| 用户提供输出目录 | `<目录>/test_cases.py` |
+| 用户提供原始输入文档路径（如 `D:\xx\meeting.jmx`） | 同目录同基名：`D:\xx\meeting_test.py` 或 `D:\xx\test_meeting.py` |
+| 用户仅在对话中提供 | 默认 `test_cases.py`，并询问目标目录 |
+
+**仅落盘 .py 文件**；不创建 `.md` 副本，不创建报告，不创建说明文档。
+
+### 关键实现要点
+
+1. **接口用例**：用 `requests` 库；headers/body/断言直接映射 Python 调用
+2. **UI 用例**：用 `playwright` 同步 API；steps 数组按序映射为 page 对象方法调用
+3. **占位符**：`{{TOKEN}}` / `{{USER_INPUT_*}}` 转为模块级变量 `os.environ.get()` 或 pytest fixture
+4. **依赖关系**：`depends_on` 转为 `@pytest.mark.dependency`（pytest-dependency 库）
+5. **多步骤用例**：单个测试函数内多次调用 + 本地变量传递 capture
+6. **不可自动化用例**：以 `# === TC-XXX-NNN [SKIP-MANUAL] ===` 注释块呈现，含「用例标题、维度+优先级、不可自动化原因、人工执行步骤、预期结果」5 段
+7. **文件可直接运行**：`pytest <file>.py` 应能正常发现并执行所有自动化用例
+8. **文件头 docstring**：含本批用例统计、依赖说明、占位符清单、推荐执行命令
+
+详细规范、文件骨架、断言映射、占位符注入方式见 [references/python-script-output.md](references/python-script-output.md)。
+
 ## 文件索引
 
 - [覆盖维度 checklist](references/coverage-checklist.md) — 9 维度自查清单
 - [用例类型分支规范](references/case-types.md) — 接口/UI 用例的强制字段
 - [AI 可执行块规范](references/agent-executable-spec.md) — `agent-exec` YAML schema、可用动作与断言清单、工具映射
 - [Markdown 表格模板](references/markdown-template.md) — 完整人机两用样例
+- [Python 脚本输出规范](references/python-script-output.md) — pytest 文件骨架、agent-exec→Python 映射、可/不可自动化判定与注释格式
