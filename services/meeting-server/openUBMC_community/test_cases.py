@@ -1,44 +1,77 @@
 # -*- coding: utf-8 -*-
 """
-openUBMC 会议中心 —— 创建会议 + 删除会议 接口测试脚本
-=========================================================
+openUBMC 集成测试合并脚本：OneID 登录 + 会议中心 创建/删除接口
+=================================================================
 
-依据：
-    1. D:/gxz/ai_gxz/meeting/meeting_api_doc.md 接口文档
-    2. D:/gxz/ai_gxz/meeting/test_oneid_login.py 实测过的登录链路
-    3. conftest.py 中 biz_request 提供的 token + _U_T_ + _Y_G_ 完整鉴权
+来源合并：
+    1. test_cases.py（原）            —— OneID 登录接口 13 条用例
+    2. test_meeting_create_delete.py —— 会议创建 / 删除接口 30 条用例 + 1 条 SKIP-MANUAL
 
-覆盖接口：
-    1. POST   /api-meeting/v1/meeting/                  （创建会议）
-    2. DELETE /api-meeting/v1/meeting/{meetingId}/      （删除/取消会议）
+被测系统：
+    1. https://usercenter.openubmc.test.osinfra.cn/oneid/login   （OneID 鉴权）
+    2. https://openubmc-website.test.osinfra.cn/api-meeting/v1/* （会议中心）
 
-共享配置：
-    - 全局常量、登录链路、凭据缓存、login_creds fixture 全部抽到 conftest.py
-    - 本文件仅包含会议业务相关 helper 与 30 条用例
-    - 所有业务调用走 biz_request()，确保自动注入 _U_T_ + _Y_G_ Cookie
+用例统计：
+    - OneID 登录：13 条全自动化
+    - 会议创建：20 条全自动化
+    - 会议删除：10 条全自动化
+    - 不可自动化：1 条（含图形验证码人工链路）
+    - 合计：43 条自动化 + 1 条手工
 
 依赖：
     pip install pytest requests cryptography python-dotenv
 
 执行：
     set PASSWORD=Aa123456@
-    pytest -v -s test_meeting_create_delete.py
-    pytest -v -s test_meeting_create_delete.py -k "create"
-    pytest -v -s test_meeting_create_delete.py -k "delete"
+    pytest -v test_cases.py
+    pytest -v test_cases.py -k "login"
+    pytest -v test_cases.py -k "meeting"
+    pytest -v test_cases.py -k "create"
+    pytest -v test_cases.py -k "delete"
+    pytest -vs test_cases.py                  # 同时打印请求/响应明细
 
-用例统计：
-    - 总数: 30 自动化 + 1 不可自动化注释
-    - P0: 8  ｜ P1: 14  ｜ P2: 8
+环境变量：
+    PASSWORD              明文密码（默认 Aa123456@）
+    MEETING_ACCOUNT       业务接口用账号（默认 19938204520）
+    HTTP_VERBOSE=0        关闭控制台请求/响应明细打印
+    HTTP_LOG_FILE=<path>  自定义 HTTP 流水落盘路径，置空则不落盘
+    FORCE_LOGIN=1         强制重新登录（忽略 .token_cache.json）
+
+平台实测事实（脚本对照执行结果校正过）：
+    1. OneID 鉴权链路三步：GET /oneid/public/key 取 RSA 公钥 → PKCS1v15 加密明文 →
+       hex 编码 → POST /oneid/login
+    2. POST /oneid/login 必须携带 Origin + Referer 头才会校验 redirect_uri；
+       否则一律返回 HTTP 404「redirect_uri not found in the app」
+    3. 业务接口（/api-meeting/*）需同时携带 Header: token + Cookie: _U_T_=token; _Y_G_=session，
+       任一缺失即 401「鉴权失败，您的账号已退登」（详见 conftest.py）
+    4. 错误码字典：
+       - E00052「账号和密码不匹配」(HTTP 400)：密码错 / 账号不存在 / 明文密码 / 空 password
+       - E00012「请求异常」(HTTP 400)：空 account / 缺 permission / permission 枚举外值
+       - HTTP 404「redirect_uri not found in the app」：错误 client_id
+       - HTTP 418 + CloudWAF HTML：SQL 注入串被 WAF 拦截
 """
 
-import json
 import os
-import random
+import json
 import time
-from datetime import datetime, timedelta
+import random
+import datetime
+import threading
+from datetime import datetime as _dt, timedelta
+from pathlib import Path
 
 import pytest
+import requests
+from cryptography.hazmat.primitives.asymmetric import padding as _rsa_padding
+from cryptography.hazmat.primitives.serialization import load_pem_public_key as _load_pem
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# conftest.py 中的会议业务通用工具
 from conftest import (
     biz_request,
     build_business_headers,
@@ -46,7 +79,442 @@ from conftest import (
 
 
 # =========================================================
-# 一、会议业务常量
+# 一、OneID 登录脚本独立常量（不依赖 conftest，直测登录接口）
+# =========================================================
+BASE_AUTH = "https://usercenter.openubmc.test.osinfra.cn"
+
+ACCOUNT = os.environ.get("TEST_ACCOUNT")
+CLIENT_ID = "672b25d8b92861baa16ce1e3"
+REDIRECT_URI = "https://openubmc-website.test.osinfra.cn/personal/meeting"
+EXPECTED_USERNAME = "xiaoguozhi34"   # 实测正常登录返回的 username
+
+PASSWORD = os.environ.get("TEST_PASSWORD")
+DEFAULT_TIMEOUT = 10
+
+# 必备 headers：Origin + Referer 缺失会让平台一律返回 404
+COMMON_HEADERS = {
+    "Content-Type": "application/json",
+    "Origin": BASE_AUTH,
+    "Referer": (
+        f"{BASE_AUTH}/login?client_id={CLIENT_ID}"
+        f"&redirect_uri=https%3A%2F%2Fopenubmc-website.test.osinfra.cn%2Fpersonal%2Fmeeting"
+        f"&response_type=code"
+    ),
+}
+
+# ===== HTTP 日志开关 =====
+HTTP_VERBOSE = os.environ.get("HTTP_VERBOSE", "1") not in ("0", "false", "False", "")
+_DEFAULT_LOG = str(Path(__file__).with_suffix(".http.log.jsonl"))
+HTTP_LOG_FILE = os.environ.get("HTTP_LOG_FILE", _DEFAULT_LOG)
+SENSITIVE_KEYS = {"password", "token", "Authorization", "PRIVATE-TOKEN", "Cookie"}
+
+_log_lock = threading.Lock()
+_current_case_id = "<no-case>"
+
+
+def _mask(value):
+    if not isinstance(value, str) or len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _redact(obj):
+    if isinstance(obj, dict):
+        return {k: (_mask(v) if k in SENSITIVE_KEYS and isinstance(v, str) else _redact(v))
+                for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_redact(x) for x in obj]
+    return obj
+
+
+def _safe_json(text):
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
+
+def _truncate(text, limit=4000):
+    if text is None:
+        return None
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"...<truncated {len(text) - limit} chars>"
+
+
+def _print_req_resp(method, url, req_headers, req_body, resp, elapsed_s):
+    sep = "-" * 76
+    print()
+    print(sep)
+    print(f"[HTTP] [{_current_case_id}] {method} {url}")
+    print(f"  > headers: {_redact(dict(req_headers or {}))}")
+    if req_body is not None:
+        print(f"  > body:    {json.dumps(_redact(req_body), ensure_ascii=False)}")
+    print(f"  < status:  {resp.status_code}  (耗时 {elapsed_s:.3f}s)")
+    print(f"  < headers: {dict(resp.headers)}")
+    parsed = _safe_json(resp.text)
+    if parsed is not None:
+        print(f"  < body:    {json.dumps(parsed, ensure_ascii=False)}")
+    else:
+        print(f"  < body:    {_truncate(resp.text)}")
+    print(sep)
+
+
+def _append_jsonl(record):
+    if not HTTP_LOG_FILE:
+        return
+    try:
+        with _log_lock:
+            with open(HTTP_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"[HTTP-LOG] 写入失败: {e}")
+
+
+def _send(method, url, *, headers=None, json_body=None, params=None,
+          timeout=DEFAULT_TIMEOUT):
+    started = time.time()
+    started_iso = datetime.datetime.now().isoformat(timespec="seconds")
+    err = None
+    resp = None
+    try:
+        resp = requests.request(
+            method, url,
+            headers=headers, json=json_body, params=params, timeout=timeout,
+        )
+    except Exception as e:
+        err = e
+    elapsed_s = time.time() - started
+
+    if resp is not None and HTTP_VERBOSE:
+        _print_req_resp(method, url, headers, json_body, resp, elapsed_s)
+
+    record = {
+        "ts": started_iso,
+        "case_id": _current_case_id,
+        "elapsed_s": round(elapsed_s, 3),
+        "request": {
+            "method": method, "url": url, "params": params,
+            "headers": _redact(dict(headers or {})),
+            "body": _redact(json_body) if json_body is not None else None,
+        },
+    }
+    if resp is not None:
+        record["response"] = {
+            "status_code": resp.status_code,
+            "headers": dict(resp.headers),
+            "body_raw": _truncate(resp.text),
+            "body_json": _safe_json(resp.text),
+        }
+    if err is not None:
+        record["error"] = f"{type(err).__name__}: {err}"
+    _append_jsonl(record)
+
+    if err is not None:
+        raise err
+    return resp
+
+
+@pytest.fixture(autouse=True)
+def _capture_case_id(request):
+    global _current_case_id
+    _current_case_id = request.node.name
+    if HTTP_VERBOSE:
+        print(f"\n========== [CASE START] {_current_case_id} ==========")
+    yield
+    if HTTP_VERBOSE:
+        print(f"========== [CASE END]   {_current_case_id} ==========\n")
+    _current_case_id = "<no-case>"
+
+
+# ===== OneID 加密链路 =====
+
+
+def _fetch_public_key():
+    """GET /oneid/public/key 获取 RSA 公钥 PEM"""
+    resp = _send("GET", f"{BASE_AUTH}/oneid/public/key", headers=COMMON_HEADERS)
+    assert resp.status_code == 200, f"取公钥失败 status={resp.status_code}"
+    data = resp.json()
+    pub = (((data or {}).get("data") or {}).get("rsa") or {}).get("publicKey")
+    assert pub, f"响应中未含 data.rsa.publicKey: {data}"
+    return pub
+
+
+def _encrypt_password(plaintext, public_key_pem=None):
+    """OneID 实测加密：RSA PKCS1v15 → bytes → hex 字符串
+
+    兼容性：若传入的 plaintext 本身就是 hex 加密串（长度=256 且全为 hex 字符），
+    认为是预加密结果直接返回；否则按明文走标准 PKCS1v15 加密。
+    """
+    if isinstance(plaintext, str) and len(plaintext) == 256:
+        try:
+            int(plaintext, 16)
+            return plaintext   # 看起来是已加密的 256 字符 hex 串，原样返回
+        except ValueError:
+            pass
+    if public_key_pem is None:
+        public_key_pem = _fetch_public_key()
+    key = _load_pem(public_key_pem.encode("utf-8"))
+    return key.encrypt(plaintext.encode("utf-8"), _rsa_padding.PKCS1v15()).hex()
+
+
+def _build_body(**overrides):
+    """构造默认合法登录 body；用 overrides 注入差异化字段（含删除字段语义）"""
+    body = {
+        "permission": "sigRead",
+        "account": ACCOUNT,
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "password": _encrypt_password(PASSWORD),
+        "oneidPrivacyAccepted": "20240830",
+    }
+    for k, v in overrides.items():
+        if v is _MISSING:
+            body.pop(k, None)
+        else:
+            body[k] = v
+    return body
+
+
+class _Sentinel:
+    pass
+
+
+_MISSING = _Sentinel()
+
+
+def _post_login(body):
+    return _send(
+        "POST",
+        f"{BASE_AUTH}/oneid/login",
+        headers=COMMON_HEADERS,
+        json_body=body,
+    )
+
+
+# =========================================================
+# 二、OneID 登录接口测试用例（13 条）
+# =========================================================
+
+# ---------------- 2.1 正常流 ----------------
+
+
+def test_tc_api_login_001_normal_flow():
+    """
+    TC-API-LOGIN-001 [正常流] 合法账号 + 加密密码 + 完整 Header 登录成功
+    模块：OneID/登录 | 优先级：P0
+
+    前置条件：
+        1. 账号 19938204520 已注册并启用
+        2. 明文密码 Aa123456@（环境变量 PASSWORD 注入）
+        3. /oneid/public/key 端点可达
+    操作步骤：
+        1. GET /oneid/public/key 取 RSA 公钥 PEM
+        2. 用公钥 PKCS1v15 加密明文密码 → bytes → hex 字符串
+        3. POST /oneid/login，body 含全部字段
+           headers 含 Content-Type / Origin / Referer
+    预期结果：
+        1. HTTP 200
+        2. body.code = 200，body.msg = "success"
+        3. body.data.token 非空且长度 ≥ 16
+        4. body.data.username = "xiaoguozhi34"
+        5. body.data.email_exist = True，phone_exist = True
+    """
+    resp = _post_login(_build_body())
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("code") == 200, f"code={body.get('code')}"
+    assert body.get("msg") == "success"
+    data = body.get("data") or {}
+    token = data.get("token")
+    assert token and isinstance(token, str) and len(token) >= 16, \
+        f"token 缺失或长度异常：{token!r}"
+    assert data.get("username") == EXPECTED_USERNAME, \
+        f"username={data.get('username')}"
+    assert data.get("email_exist") is True
+    assert data.get("phone_exist") is True
+
+
+# ---------------- 2.2 异常 / 反向 ----------------
+
+
+def test_tc_api_login_002_wrong_password():
+    """
+    TC-API-LOGIN-002 [异常] 密码错误时返回 E00052
+    模块：OneID/登录 | 优先级：P0
+    实测响应：HTTP 400 + body.code=400 + body.msg.code="E00052"
+              + body.data.need_captcha_verification=False
+    """
+    body = _build_body(password=_encrypt_password("WrongPwd_xxxx_xxxx"))
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert rj.get("code") == 400
+    msg = rj.get("msg") or {}
+    assert isinstance(msg, dict)
+    assert msg.get("code") == "E00052"
+    assert msg.get("message_en") == "Incorrect account or password."
+    # 不应返回 token
+    assert not (rj.get("data") or {}).get("token")
+
+
+def test_tc_api_login_003_nonexistent_account():
+    """
+    TC-API-LOGIN-003 [异常] 不存在的账号返回 E00052
+    模块：OneID/登录 | 优先级：P1
+    """
+    body = _build_body(account="00000000000")
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert rj.get("code") == 400
+
+
+def test_tc_api_login_004_wrong_client_id():
+    """
+    TC-API-LOGIN-004 [异常输入] 错误的 client_id 返回 404 redirect_uri not found
+    模块：OneID/登录 | 优先级：P1
+    实测响应：HTTP 404 + body.code=404 + body.msg="redirect_uri not found in the app"
+    """
+    body = _build_body(client_id="000000000000000000000000")
+    resp = _post_login(body)
+    assert resp.status_code == 404
+    rj = resp.json()
+    assert rj.get("code") == 404
+    assert "redirect_uri not found" in str(rj.get("msg", ""))
+
+
+def test_tc_api_login_005_plain_password():
+    """
+    TC-API-LOGIN-005 [异常] 明文密码（未加密）直接送会被识为密码错误
+    模块：OneID/登录 | 优先级：P0
+    实测：未经过 RSA 加密的字符串放进 password 字段，平台无法解密，按密码错处理
+    """
+    body = _build_body(password="this_is_a_raw_plaintext_password_123")
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert (rj.get("msg") or {}).get("code") == "E00052"
+
+
+# ---------------- 2.3 空值 ----------------
+
+
+def test_tc_api_login_006_empty_account():
+    """
+    TC-API-LOGIN-006 [空值] account 为空字符串返回 E00012 请求异常
+    模块：OneID/登录 | 优先级：P0
+    """
+    body = _build_body(account="")
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert rj.get("code") == 400
+    msg = rj.get("msg") or {}
+    assert msg.get("code") == "E00012"
+    assert msg.get("message_en") == "Request Error"
+
+
+def test_tc_api_login_007_empty_password():
+    """
+    TC-API-LOGIN-007 [空值] password 为空字符串被识为密码错误
+    模块：OneID/登录 | 优先级：P0
+    """
+    body = _build_body(password="")
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert (rj.get("msg") or {}).get("code") == "E00052"
+
+
+def test_tc_api_login_008_missing_permission():
+    """
+    TC-API-LOGIN-008 [空值] permission 字段缺失返回 E00012 请求异常
+    模块：OneID/登录 | 优先级：P1
+    """
+    body = _build_body(permission=_MISSING)
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert (rj.get("msg") or {}).get("code") == "E00012"
+
+
+# ---------------- 2.4 异常输入 ----------------
+
+
+def test_tc_api_login_009_invalid_permission_enum():
+    """
+    TC-API-LOGIN-009 [异常输入] permission 枚举外值返回 E00012 请求异常
+    模块：OneID/登录 | 优先级：P1
+    """
+    body = _build_body(permission="NOT_A_VALID_PERMISSION")
+    resp = _post_login(body)
+    assert resp.status_code == 400
+    rj = resp.json()
+    assert (rj.get("msg") or {}).get("code") == "E00012"
+
+
+def test_tc_api_login_010_unregistered_phone():
+    """
+    TC-API-LOGIN-010 [异常输入] 未注册的合法手机号格式返回 E00052
+    模块：OneID/登录 | 优先级：P2
+    """
+    body = _build_body(account="13800000000")
+    resp = _post_login(body)
+    assert resp.status_code == 400
+
+
+# ---------------- 2.5 特殊字符 / 安全 ----------------
+
+
+def test_tc_api_login_011_sql_injection_blocked_by_waf():
+    """
+    TC-API-LOGIN-011 [特殊字符][SQL注入] account 含 SQL 注入串被 WAF 拦截
+    模块：OneID/登录 | 优先级：P0
+    实测响应：HTTP 418 + CloudWAF HTML 拦截页（非 JSON）
+    """
+    body = _build_body(account="' OR '1'='1")
+    resp = _post_login(body)
+    assert resp.status_code == 418, f"未被 WAF 拦截：status={resp.status_code}"
+    assert "CloudWAF" in resp.text or "访问被拦截" in resp.text, \
+        f"非 WAF 拦截页面：{resp.text[:200]}"
+    assert "token" not in resp.text.lower() or "JWT" not in resp.text
+
+
+# ---------------- 2.6 字段非强制 / 边界 ----------------
+
+
+def test_tc_api_login_012_missing_redirect_uri_still_ok():
+    """
+    TC-API-LOGIN-012 [边界值] 缺 redirect_uri 字段仍可登录成功
+    模块：OneID/登录 | 优先级：P2
+
+    实测发现：当请求 headers 含正确 Referer 时，body 中即使不带 redirect_uri
+              也能登录成功（平台从 Referer 推断）。
+    """
+    body = _build_body(redirect_uri=_MISSING)
+    resp = _post_login(body)
+    assert resp.status_code == 200
+    rj = resp.json()
+    assert rj.get("code") == 200
+    assert (rj.get("data") or {}).get("token")
+
+
+def test_tc_api_login_013_missing_privacy_field_still_ok():
+    """
+    TC-API-LOGIN-013 [边界值] 缺 oneidPrivacyAccepted 字段仍可登录成功
+    模块：OneID/登录 | 优先级：P2
+    """
+    body = _build_body(oneidPrivacyAccepted=_MISSING)
+    resp = _post_login(body)
+    assert resp.status_code == 200
+    rj = resp.json()
+    assert rj.get("code") == 200
+    assert (rj.get("data") or {}).get("token")
+
+
+# =========================================================
+# 三、会议业务常量与工具函数
 # =========================================================
 DEFAULT_GROUP = "infrastructure"
 DEFAULT_PLATFORM = "WELINK"
@@ -63,11 +531,8 @@ DEFAULT_START_HOUR = 8 + _HOUR_OFFSET
 DEFAULT_START_MIN = random.choice([0, 15, 30, 45])
 
 
-# =========================================================
-# 二、会议业务工具函数
-# =========================================================
 def _date_offset(days: int) -> str:
-    return (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+    return (_dt.now() + timedelta(days=days)).strftime("%Y-%m-%d")
 
 
 def _default_time_window(idx: int = 0):
@@ -259,10 +724,10 @@ def _create_or_skip(creds, body, case_label):
 
 
 # =========================================================
-# 三、创建会议接口（POST /api-meeting/v1/meeting/）测试用例
+# 四、创建会议接口（POST /api-meeting/v1/meeting/）测试用例
 # =========================================================
 
-# ---------------- 3.1 正常流程 ----------------
+# ---------------- 4.1 正常流程 ----------------
 def test_TC_API_MEETING_CREATE_001_single_meeting(login_creds, cleanup_meetings):
     """
     用例ID: TC-API-MEETING-CREATE-001
@@ -296,8 +761,8 @@ def test_TC_API_MEETING_CREATE_003_day_cycle(login_creds, cleanup_meetings):
     """
     body = _build_cycle_meeting_body(
         cycle_type=0,
-        cycle_start_date=_date_offset(2),
-        cycle_end_date=_date_offset(5),
+        cycle_start_date=_date_offset(30),
+        cycle_end_date=_date_offset(32),
         slot=3,
     )
     body.pop("cycle_point", None)
@@ -306,7 +771,7 @@ def test_TC_API_MEETING_CREATE_003_day_cycle(login_creds, cleanup_meetings):
     cleanup_meetings.append(mid)
 
 
-# ---------------- 3.2 异常场景：必填字段缺失 ----------------
+# ---------------- 4.2 异常场景：必填字段缺失 ----------------
 @pytest.mark.parametrize(
     "missing_key, case_id",
     [
@@ -345,7 +810,7 @@ def test_TC_API_MEETING_CREATE_required_field_missing(login_creds, missing_key, 
     assert is_negative, f"[{case_id}] 缺少 {missing_key} 但接口未拒绝: status={resp.status_code} body={resp.text[:300]}"
 
 
-# ---------------- 3.3 异常场景：日期格式错误 ----------------
+# ---------------- 4.3 异常场景：日期格式错误 ----------------
 def test_TC_API_MEETING_CREATE_009_invalid_date_format(login_creds):
     """
     用例ID: TC-API-MEETING-CREATE-009
@@ -364,7 +829,7 @@ def test_TC_API_MEETING_CREATE_009_invalid_date_format(login_creds):
         assert resp.status_code >= 400
 
 
-# ---------------- 3.4 异常场景：cycle_type 非法值 ----------------
+# ---------------- 4.4 异常场景：cycle_type 非法值 ----------------
 def test_TC_API_MEETING_CREATE_010_invalid_cycle_type(login_creds):
     """
     用例ID: TC-API-MEETING-CREATE-010
@@ -383,7 +848,7 @@ def test_TC_API_MEETING_CREATE_010_invalid_cycle_type(login_creds):
         assert resp.status_code >= 400
 
 
-# ---------------- 3.5 权限校验：未登录 / 错误 token ----------------
+# ---------------- 4.5 权限校验：未登录 / 错误 token ----------------
 def test_TC_API_MEETING_CREATE_011_no_token():
     """
     用例ID: TC-API-MEETING-CREATE-011
@@ -393,7 +858,6 @@ def test_TC_API_MEETING_CREATE_011_no_token():
     body = _build_single_meeting_body()
     headers = build_business_headers(token="")
     headers.pop("token", None)
-    # 显式传 None creds + 空 headers，确保不携带任何鉴权信息
     resp = biz_request(
         "POST",
         PATH_MEETING,
@@ -414,7 +878,6 @@ def test_TC_API_MEETING_CREATE_012_invalid_token():
     描述  : 携带错误的 token 调用创建会议接口
     """
     body = _build_single_meeting_body()
-    # 错 token + 不带 cookie：业务接口必拒
     resp = biz_request(
         "POST",
         PATH_MEETING,
@@ -426,7 +889,7 @@ def test_TC_API_MEETING_CREATE_012_invalid_token():
     )
 
 
-# ---------------- 3.6 边界值 ----------------
+# ---------------- 4.6 边界值 ----------------
 def test_TC_API_MEETING_CREATE_013_topic_min_length(login_creds, cleanup_meetings):
     """
     用例ID: TC-API-MEETING-CREATE-013
@@ -514,7 +977,7 @@ def test_TC_API_MEETING_CREATE_017_cycle_end_before_start(login_creds):
         assert resp.status_code >= 400
 
 
-# ---------------- 3.7 特殊字符 ----------------
+# ---------------- 4.7 特殊字符 ----------------
 def test_TC_API_MEETING_CREATE_018_topic_emoji(login_creds, cleanup_meetings):
     """
     用例ID: TC-API-MEETING-CREATE-018
@@ -563,10 +1026,10 @@ def test_TC_API_MEETING_CREATE_020_topic_sql_injection(login_creds, cleanup_meet
 
 
 # =========================================================
-# 四、删除会议接口（DELETE /api-meeting/v1/meeting/{id}/）测试用例
+# 五、删除会议接口（DELETE /api-meeting/v1/meeting/{id}/）测试用例
 # =========================================================
 
-# ---------------- 4.1 正常流程 ----------------
+# ---------------- 5.1 正常流程 ----------------
 def test_TC_API_MEETING_DELETE_001_delete_single(login_creds):
     """
     用例ID: TC-API-MEETING-DELETE-001
@@ -589,7 +1052,7 @@ def test_TC_API_MEETING_DELETE_002_delete_month_cycle(login_creds):
     assert resp.status_code == 200, f"删除月周期会议失败 status={resp.status_code} body={resp.text[:300]}"
 
 
-# ---------------- 4.2 异常场景 ----------------
+# ---------------- 5.2 异常场景 ----------------
 def test_TC_API_MEETING_DELETE_003_not_exist(login_creds):
     """
     用例ID: TC-API-MEETING-DELETE-003
@@ -645,7 +1108,7 @@ def test_TC_API_MEETING_DELETE_006_zero_id(login_creds):
         assert resp.status_code >= 400
 
 
-# ---------------- 4.3 权限校验 ----------------
+# ---------------- 5.3 权限校验 ----------------
 def test_TC_API_MEETING_DELETE_007_no_token(login_creds):
     """
     用例ID: TC-API-MEETING-DELETE-007
@@ -690,7 +1153,7 @@ def test_TC_API_MEETING_DELETE_008_invalid_token(login_creds):
         _safe_delete(login_creds, mid)
 
 
-# ---------------- 4.4 重复操作（幂等性） ----------------
+# ---------------- 5.4 重复操作（幂等性） ----------------
 def test_TC_API_MEETING_DELETE_009_duplicate_delete(login_creds):
     """
     用例ID: TC-API-MEETING-DELETE-009
@@ -713,7 +1176,7 @@ def test_TC_API_MEETING_DELETE_009_duplicate_delete(login_creds):
     assert is_negative, f"重复删除未返回失败状态: status={resp2.status_code} body={resp2.text[:300]}"
 
 
-# ---------------- 4.5 边界值 ----------------
+# ---------------- 5.5 边界值 ----------------
 def test_TC_API_MEETING_DELETE_010_huge_id(login_creds):
     """
     用例ID: TC-API-MEETING-DELETE-010
@@ -725,7 +1188,7 @@ def test_TC_API_MEETING_DELETE_010_huge_id(login_creds):
 
 
 # =========================================================
-# 五、不可自动化用例（注释块说明）
+# 六、不可自动化用例（注释块说明）
 # =========================================================
 # === TC-API-MEETING-CREATE-MANUAL-001 [SKIP-MANUAL] ===
 # 用例标题: [安全] 验证创建会议接口在 OneID 触发图形验证码后的鉴权链路
@@ -745,6 +1208,37 @@ def test_TC_API_MEETING_DELETE_010_huge_id(login_creds):
 # 预期结果:
 #   登录成功后 token 有效，创建会议接口正常返回 meeting_id。
 # === END SKIP-MANUAL ===
+
+
+# =========================================================
+# 七、覆盖矩阵（备注）
+# =========================================================
+# === OneID 登录 ===
+# | 维度          | 已覆盖用例                          |
+# |---------------|------------------------------------|
+# | 1 正常流      | LOGIN-001                          |
+# | 2 异常        | LOGIN-002 / 003 / 004 / 005       |
+# | 3 边界值      | LOGIN-012 / 013                   |
+# | 4 空值        | LOGIN-006 / 007 / 008             |
+# | 5 特殊字符    | LOGIN-011（SQL 注入）             |
+# | 6 权限校验    | LOGIN-004（错误 client_id）       |
+# | 7 数据唯一性  | — N/A（登录无唯一性概念）         |
+# | 8 重复操作    | — 平台无返回头明示限流，未覆盖   |
+# | 9 异常输入    | LOGIN-009 / 010                   |
+#
+# === 会议创建/删除 ===
+# | 维度          | 已覆盖用例                          |
+# |---------------|------------------------------------|
+# | 1 正常流      | CREATE-001/002/003, DELETE-001/002 |
+# | 2 异常        | CREATE-004~009, DELETE-003        |
+# | 3 边界值      | CREATE-013~017, DELETE-005/006/010|
+# | 4 空值        | CREATE-004~008                    |
+# | 5 特殊字符    | CREATE-018/019/020                |
+# | 6 权限校验    | CREATE-011/012, DELETE-007/008    |
+# | 7 数据唯一性  | — 平台限制，跳过                  |
+# | 8 重复操作    | DELETE-009                         |
+# | 9 异常输入    | CREATE-009/010, DELETE-004        |
+# =========================================================
 
 
 if __name__ == "__main__":

@@ -1,27 +1,25 @@
-# Service A Base Community Tests
+# Service A openEuler Community Tests
 
-所有社区的公共测试用例脚本。这些测试用例是所有社区共用的基础测试。
+openEuler 社区专属测试用例。该目录下的测试用例仅在 openEuler 社区环境中执行。
 
 ## 目录结构
 
 ```
-services/meeting-server/base_community/
+services/meeting-server/openeuler_community/
 ├── README.md              # 本文件
-├── run_all.sh             # 执行所有公共测试用例
-└── test_*.sh              # 公共测试用例脚本
+├── run_all.sh             # 执行所有 openEuler 专属测试用例
+└── test_*.sh              # openEuler 专属测试用例脚本
 ```
 
 ## 使用方法
 
 ```bash
-# 执行所有公共测试用例
-bash services/meeting-server/base_community/run_all.sh
-
-# 执行单个测试用例
-bash services/meeting-server/base_community/test_service_a_basic.sh
+# 执行所有 openEuler 专属测试用例
+bash services/meeting-server/openeuler_community/run_all.sh
 ```
 
-## 测试用例说明
+## 与 base_community 的关系
 
-- 所有放在 `base_community/` 下的测试用例会被所有社区执行
-- 社区特定的测试用例请放在对应的 `*_community/` 目录下（如 `openeuler_community/`）
+1. 先执行 `base_community/` 下的公共测试用例
+2. 再执行 `openeuler_community/` 下的 openEuler 专属测试用例
+3. 公共测试用例由所有社区共享，专属测试用例仅针对特定社区
