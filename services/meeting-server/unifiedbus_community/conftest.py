@@ -53,32 +53,32 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================================================
 # 一、全局常量
 # =========================================================
-# 来源：meeting.jmx 全局变量「全局变量：URL等」
-#   userURL=openeuler-usercenter.test.osinfra.cn
-#   hostURL=openeuler.test.osinfra.cn
-HOST_URL = os.environ.get("HOST_URL", "openeuler.test.osinfra.cn")
-USER_URL = os.environ.get("USER_URL", "openeuler-usercenter.test.osinfra.cn")
-CLIENT_ID = "623c3c2f1eca5ad5fca6c58a"
+# 域名来源：unifiedbus 社区
+#   userURL=id.unifiedbus.test.osinfra.cn
+#   hostURL=unifiedbus.test.osinfra.cn
+HOST_URL = os.environ.get("HOST_URL", "unifiedbus.test.osinfra.cn")
+USER_URL = os.environ.get("USER_URL", "id.unifiedbus.test.osinfra.cn")
+CLIENT_ID = "68a5825f4f008658ee22e148"
 PROTOCOL = "https"
 
 BASE_AUTH = f"{PROTOCOL}://{USER_URL}"
 BASE_BIZ = f"{PROTOCOL}://{HOST_URL}"
 
-ACCOUNT = os.environ.get("TEST_ACCOUNT", "19938204520")
+ACCOUNT = os.environ.get("TEST_ACCOUNT_UNIFIEDBUS")
 PASSWORD = os.environ.get("TEST_PASSWORD")
 
 PATH_PUBLIC_KEY = "/oneid/public/key"
 PATH_LOGIN = "/oneid/login"
-# 用于轻量校验登录凭据是否仍有效的探针接口（openeuler 域使用 v2 路径）
+# 用于轻量校验登录凭据是否仍有效的探针接口（unifiedbus 路径前缀 /api-meeting/）
 PATH_TOKEN_PROBE = os.environ.get(
-    "PATH_TOKEN_PROBE", "/api-meeting-v2/meeting/web/platform/"
+    "PATH_TOKEN_PROBE", "/api-meeting/platform/"
 )
 
 REQ_TIMEOUT = 30
 
 TOKEN_CACHE_FILE = os.path.join(os.path.dirname(__file__), ".token_cache.json")
 
-# openeuler 域 OneID 登录无需 redirect_uri 字段；保留常量供调用侧引用，但 body 不带
+# unifiedbus 域 OneID 登录无需 redirect_uri 字段；保留常量供调用侧引用，但 body 不带
 REDIRECT_URI = f"{BASE_BIZ}/auth/callback"
 LOGIN_HEADERS = {
     "Content-Type": "application/json;charset=UTF-8",
@@ -127,6 +127,27 @@ def build_business_cookies(token: str, yg: str = None) -> dict:
     return cookies
 
 
+def _is_unauth_response(resp) -> bool:
+    """判断响应是否属于「账号已退登 / token 失效」类的鉴权失败。
+
+    平台特征：HTTP 401 + body 含「账号已退登」/「鉴权失败」/code=401。
+    """
+    if resp is None:
+        return False
+    if resp.status_code != 401:
+        return False
+    txt = (resp.text or "")[:300]
+    if "账号已退登" in txt or "鉴权失败" in txt:
+        return True
+    try:
+        rj = resp.json()
+        if isinstance(rj, dict) and rj.get("code") in (401, "401"):
+            return True
+    except Exception:
+        pass
+    return True  # 401 一律视为鉴权失败
+
+
 def biz_request(method: str, path: str, creds, **kwargs):
     """业务接口请求统一入口。
 
@@ -134,28 +155,60 @@ def biz_request(method: str, path: str, creds, **kwargs):
         method: HTTP 方法
         path  : 业务路径，自动拼 BASE_BIZ
         creds : 登录凭据，三种取值：
-            - dict {"token":..., "yg":...} —— 正常带完整鉴权
-            - str token —— 兼容旧调用，仅带 token header（用例可显式触发未登录场景）
-            - None / "" —— 不带任何鉴权（权限校验用例用）
+            - dict {"token":..., "yg":...} —— 正常带完整鉴权；
+              首次响应 401「账号已退登」时会自动重新登录并重试一次，
+              新 token/yg 会**原地写回 creds dict**，后续用例继承新凭据。
+            - str token —— 兼容旧调用，仅带 token header（用例可显式触发未登录场景），
+              此模式不会触发自动续签。
+            - None / "" —— 不带任何鉴权（权限校验用例用），不会触发自动续签。
         **kwargs: 透传 requests.request
     """
     headers = kwargs.pop("headers", None)
     cookies = kwargs.pop("cookies", None)
+    # 调用方可显式关闭自动续签（如「权限校验」类用例本就期望 401）
+    auto_relogin = kwargs.pop("auto_relogin", True)
+
+    def _send(token_, yg_, _headers, _cookies):
+        if _headers is None:
+            _headers = build_business_headers(token_)
+        if _cookies is None:
+            _cookies = build_business_cookies(token_, yg_) if isinstance(creds, dict) else {}
+        kw = dict(kwargs)
+        kw.setdefault("verify", False)
+        kw.setdefault("timeout", REQ_TIMEOUT)
+        return requests.request(method, host_url(path), headers=_headers, cookies=_cookies, **kw)
 
     if isinstance(creds, dict):
         token = creds.get("token") or ""
         yg = creds.get("yg") or ""
-        if headers is None:
-            headers = build_business_headers(token)
-        if cookies is None:
-            cookies = build_business_cookies(token, yg)
-    else:
-        token = creds or ""
-        if headers is None:
-            headers = build_business_headers(token)
-        if cookies is None:
-            cookies = {}
+        resp = _send(token, yg, headers, cookies)
 
+        # token 仍有效——绝大多数情况：直接返回
+        if not auto_relogin or not _is_unauth_response(resp):
+            return resp
+
+        # 命中「账号已退登」：重新登录、原地续签、重发一次
+        print(f"[biz_request] 检测到 401「账号已退登」，自动重新登录续签 token …")
+        try:
+            new_creds = _do_login()
+        except Exception as e:
+            print(f"[biz_request] 自动续签失败：{e}，返回原始 401 响应")
+            return resp
+        creds["token"] = new_creds["token"]
+        creds["yg"] = new_creds["yg"]
+        try:
+            _save_cached_creds(new_creds)
+        except Exception:
+            pass
+        # 用调用方原本传入的 headers/cookies（None 时让 _send 用新 token 重建）
+        return _send(creds["token"], creds["yg"], None, None)
+
+    # 字符串 token / None：兼容老路径，不参与自动续签
+    token = creds or ""
+    if headers is None:
+        headers = build_business_headers(token)
+    if cookies is None:
+        cookies = {}
     kwargs.setdefault("verify", False)
     kwargs.setdefault("timeout", REQ_TIMEOUT)
     return requests.request(method, host_url(path), headers=headers, cookies=cookies, **kwargs)

@@ -53,32 +53,33 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================================================
 # 一、全局常量
 # =========================================================
-# 来源：meeting.jmx 全局变量「全局变量：URL等」
-#   userURL=openeuler-usercenter.test.osinfra.cn
-#   hostURL=openeuler.test.osinfra.cn
-HOST_URL = os.environ.get("HOST_URL", "openeuler.test.osinfra.cn")
-USER_URL = os.environ.get("USER_URL", "openeuler-usercenter.test.osinfra.cn")
-CLIENT_ID = "623c3c2f1eca5ad5fca6c58a"
+# 域名来源：ascend 社区
+#   userURL=id.ascend.test.osinfra.cn
+#   hostURL=ascend.test.osinfra.cn
+HOST_URL = os.environ.get("HOST_URL", "ascend.test.osinfra.cn")
+USER_URL = os.environ.get("USER_URL", "id.ascend.test.osinfra.cn")
+CLIENT_ID = "102457327"
 PROTOCOL = "https"
 
 BASE_AUTH = f"{PROTOCOL}://{USER_URL}"
 BASE_BIZ = f"{PROTOCOL}://{HOST_URL}"
 
-ACCOUNT = os.environ.get("TEST_ACCOUNT", "19938204520")
+ACCOUNT = os.environ.get("TEST_ACCOUNT")
 PASSWORD = os.environ.get("TEST_PASSWORD")
+CAPTCHA_CODE = "1111"
 
 PATH_PUBLIC_KEY = "/oneid/public/key"
 PATH_LOGIN = "/oneid/login"
-# 用于轻量校验登录凭据是否仍有效的探针接口（openeuler 域使用 v2 路径）
+# 用于轻量校验登录凭据是否仍有效的探针接口（ascend 路径前缀 /ascend-meeting/）
 PATH_TOKEN_PROBE = os.environ.get(
-    "PATH_TOKEN_PROBE", "/api-meeting-v2/meeting/web/platform/"
+    "PATH_TOKEN_PROBE", "/ascend-meeting/platform/"
 )
 
 REQ_TIMEOUT = 30
 
 TOKEN_CACHE_FILE = os.path.join(os.path.dirname(__file__), ".token_cache.json")
 
-# openeuler 域 OneID 登录无需 redirect_uri 字段；保留常量供调用侧引用，但 body 不带
+# unifiedbus 域 OneID 登录无需 redirect_uri 字段；保留常量供调用侧引用，但 body 不带
 REDIRECT_URI = f"{BASE_BIZ}/auth/callback"
 LOGIN_HEADERS = {
     "Content-Type": "application/json;charset=UTF-8",
@@ -127,6 +128,27 @@ def build_business_cookies(token: str, yg: str = None) -> dict:
     return cookies
 
 
+def _is_unauth_response(resp) -> bool:
+    """判断响应是否属于「账号已退登 / token 失效」类的鉴权失败。
+
+    平台特征：HTTP 401 + body 含「账号已退登」/「鉴权失败」/code=401。
+    """
+    if resp is None:
+        return False
+    if resp.status_code != 401:
+        return False
+    txt = (resp.text or "")[:300]
+    if "账号已退登" in txt or "鉴权失败" in txt:
+        return True
+    try:
+        rj = resp.json()
+        if isinstance(rj, dict) and rj.get("code") in (401, "401"):
+            return True
+    except Exception:
+        pass
+    return True  # 401 一律视为鉴权失败
+
+
 def biz_request(method: str, path: str, creds, **kwargs):
     """业务接口请求统一入口。
 
@@ -134,28 +156,60 @@ def biz_request(method: str, path: str, creds, **kwargs):
         method: HTTP 方法
         path  : 业务路径，自动拼 BASE_BIZ
         creds : 登录凭据，三种取值：
-            - dict {"token":..., "yg":...} —— 正常带完整鉴权
-            - str token —— 兼容旧调用，仅带 token header（用例可显式触发未登录场景）
-            - None / "" —— 不带任何鉴权（权限校验用例用）
+            - dict {"token":..., "yg":...} —— 正常带完整鉴权；
+              首次响应 401「账号已退登」时会自动重新登录并重试一次，
+              新 token/yg 会**原地写回 creds dict**，后续用例继承新凭据。
+            - str token —— 兼容旧调用，仅带 token header（用例可显式触发未登录场景），
+              此模式不会触发自动续签。
+            - None / "" —— 不带任何鉴权（权限校验用例用），不会触发自动续签。
         **kwargs: 透传 requests.request
     """
     headers = kwargs.pop("headers", None)
     cookies = kwargs.pop("cookies", None)
+    # 调用方可显式关闭自动续签（如「权限校验」类用例本就期望 401）
+    auto_relogin = kwargs.pop("auto_relogin", True)
+
+    def _send(token_, yg_, _headers, _cookies):
+        if _headers is None:
+            _headers = build_business_headers(token_)
+        if _cookies is None:
+            _cookies = build_business_cookies(token_, yg_) if isinstance(creds, dict) else {}
+        kw = dict(kwargs)
+        kw.setdefault("verify", False)
+        kw.setdefault("timeout", REQ_TIMEOUT)
+        return requests.request(method, host_url(path), headers=_headers, cookies=_cookies, **kw)
 
     if isinstance(creds, dict):
         token = creds.get("token") or ""
         yg = creds.get("yg") or ""
-        if headers is None:
-            headers = build_business_headers(token)
-        if cookies is None:
-            cookies = build_business_cookies(token, yg)
-    else:
-        token = creds or ""
-        if headers is None:
-            headers = build_business_headers(token)
-        if cookies is None:
-            cookies = {}
+        resp = _send(token, yg, headers, cookies)
 
+        # token 仍有效——绝大多数情况：直接返回
+        if not auto_relogin or not _is_unauth_response(resp):
+            return resp
+
+        # 命中「账号已退登」：重新登录、原地续签、重发一次
+        print(f"[biz_request] 检测到 401「账号已退登」，自动重新登录续签 token …")
+        try:
+            new_creds = _do_login()
+        except Exception as e:
+            print(f"[biz_request] 自动续签失败：{e}，返回原始 401 响应")
+            return resp
+        creds["token"] = new_creds["token"]
+        creds["yg"] = new_creds["yg"]
+        try:
+            _save_cached_creds(new_creds)
+        except Exception:
+            pass
+        # 用调用方原本传入的 headers/cookies（None 时让 _send 用新 token 重建）
+        return _send(creds["token"], creds["yg"], None, None)
+
+    # 字符串 token / None：兼容老路径，不参与自动续签
+    token = creds or ""
+    if headers is None:
+        headers = build_business_headers(token)
+    if cookies is None:
+        cookies = {}
     kwargs.setdefault("verify", False)
     kwargs.setdefault("timeout", REQ_TIMEOUT)
     return requests.request(method, host_url(path), headers=headers, cookies=cookies, **kwargs)
@@ -254,66 +308,67 @@ def _verify_creds(creds: dict) -> bool:
 
 
 def _do_login() -> dict:
-    """执行完整登录链路，返回 {'token':..., 'yg':...}；失败抛 pytest.skip
+    """通过 Playwright 浏览器自动化完成华为账号 SDK 登录。
 
-    平台实测：调用 /oneid/login 后 Set-Cookie 同时下发 _U_T_ 和 _Y_G_，
-    其中 _U_T_ 的值与 body.data.token 完全一致；_Y_G_ 是另一段独立会话标识。
-    业务接口同时需要两者。
+    ascend 社区使用华为 ID SDK 嵌入式登录组件，无法用 requests.post 模拟。
+    流程：打开登录页 → 填账号/密码/图形验证码(1111) → 点登录 → 等跳转 →
+    从 cookie 提取 _U_T_ + _Y_G_。
     """
-    print(f"[Setup] 调用 /oneid/login 登录账号: {ACCOUNT}")
+    print(f"[Setup] Playwright 浏览器登录 ascend 账号: {ACCOUNT}")
     try:
-        encrypted = encrypt_password(PASSWORD)
-    except Exception as e:
-        pytest.skip(f"取公钥/加密密码失败：{e}")
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        pytest.skip("ascend 登录需要 playwright，请执行: pip install playwright && playwright install chromium")
 
-    body = {
-        "permission": "sigRead",
-        "account": ACCOUNT,
-        "client_id": CLIENT_ID,
-        "password": encrypted,
-        "need_captcha_verification": False,
-        "accept_term": 0,
-        "oneidPrivacyAccepted": "20250226",
-    }
+    login_url = f"{BASE_AUTH}/login"
+    token = None
+    yg = None
 
-    sess = requests.Session()
-    try:
-        resp = sess.post(
-            user_url(PATH_LOGIN),
-            headers=LOGIN_HEADERS,
-            data=json.dumps(body),
-            verify=False,
-            timeout=REQ_TIMEOUT,
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"],
         )
-    except Exception as e:
-        pytest.skip(f"登录接口请求异常：{e}")
-
-    try:
-        rj = resp.json()
-    except Exception:
-        pytest.skip(f"登录响应非 JSON status={resp.status_code} body={resp.text[:300]}")
-
-    if resp.status_code != 200 or rj.get("code") != 200:
-        msg = rj.get("msg")
-        pytest.skip(
-            f"登录失败 status={resp.status_code} code={rj.get('code')} msg={msg}；"
-            "若密码错请通过 PASSWORD 环境变量传入正确明文。"
-        )
-
-    data = rj.get("data") or {}
-    token = data.get("token")
-    yg = sess.cookies.get("_Y_G_")
-    ut = sess.cookies.get("_U_T_")
+        context = browser.new_context(ignore_https_errors=True)
+        page = context.new_page()
+        page.add_init_script('Object.defineProperty(navigator, "webdriver", {get: () => undefined})')
+        try:
+            page.goto(login_url, wait_until="networkidle", timeout=30000)
+            acct = page.query_selector('input.hwid-input.userAccount')
+            acct.click()
+            acct.type(ACCOUNT, delay=50)
+            pwd = page.query_selector('input.hwid-input.hwid-input-pwd')
+            pwd.click()
+            pwd.type(PASSWORD, delay=50)
+            captcha_el = page.query_selector('input[placeholder*="验证码"]')
+            if captcha_el:
+                captcha_el.click()
+                captcha_el.type(CAPTCHA_CODE, delay=50)
+            import time as _time
+            _time.sleep(1)
+            page.query_selector('div.hwid-login-btn').dispatch_event('click')
+            # 等待 _U_T_ cookie 出现（华为 SDK 登录成功标志）
+            for _ in range(20):
+                _time.sleep(2)
+                cookies = context.cookies()
+                for c in cookies:
+                    if c["name"] == "_U_T_":
+                        token = c["value"]
+                    elif c["name"] == "_Y_G_":
+                        yg = c["value"]
+                if token and yg:
+                    break
+        except Exception as e:
+            pytest.skip(f"Playwright 登录失败：{e}")
+        finally:
+            browser.close()
 
     if not token:
-        pytest.skip(f"登录成功但 body.data.token 为空：{rj}")
+        pytest.skip("登录成功但未获取到 _U_T_ cookie")
     if not yg:
-        pytest.skip(f"登录成功但 Set-Cookie 未下发 _Y_G_，业务鉴权将失败：headers={dict(resp.headers)}")
-    if ut and ut != token:
-        print(f"[Setup][Warn] _U_T_ 与 body.token 不一致，采用 _U_T_：ut={ut[:20]}... token={token[:20]}...")
-        token = ut
+        pytest.skip("登录成功但未获取到 _Y_G_ cookie")
 
-    print(f"[Setup] 登录成功 username={data.get('username')} token长度={len(token)} _Y_G_长度={len(yg)}")
+    print(f"[Setup] 登录成功 token长度={len(token)} _Y_G_长度={len(yg)}")
     return {"token": token, "yg": yg}
 
 
