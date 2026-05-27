@@ -1,33 +1,13 @@
 #!/bin/bash
-# Run all base community tests (foundation; no recursion into itself)
+# Run base community integration tests (foundation; pytest test_cases.py)
 set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
 echo "=== Running Base Community Tests ==="
 echo "Test directory: ${SCRIPT_DIR}"
 echo ""
-
-PASS=0
-FAIL=0
-TOTAL=0
-
-for test_file in "${SCRIPT_DIR}"/test_*.sh; do
-    [[ -f "$test_file" ]] || continue
-    TOTAL=$((TOTAL + 1))
-    test_name="$(basename "$test_file")"
-    echo "Running: ${test_name}"
-    if bash "$test_file"; then
-        echo "  PASS"
-        PASS=$((PASS + 1))
-    else
-        echo "  FAIL"
-        FAIL=$((FAIL + 1))
-    fi
-done
-
-echo ""
-echo "=== Base Community Results ==="
-echo "Total: ${TOTAL} | Pass: ${PASS} | Fail: ${FAIL}"
-
-[[ ${FAIL} -eq 0 ]]
+if [[ -f "${SCRIPT_DIR}/test_cases.py" ]]; then
+    echo "--- Running pytest test_cases.py ---"
+    pytest "${SCRIPT_DIR}/test_cases.py" -v -ra
+else
+    echo "(base_community 暂无 test_cases.py，本社区无可执行用例)"
+fi
