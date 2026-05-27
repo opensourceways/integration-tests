@@ -1,0 +1,54 @@
+{
+  "communities": {
+    "openeuler": {
+      "host_url": "openeuler.test.osinfra.cn",
+      "user_url": "openeuler-usercenter.test.osinfra.cn",
+      "client_id": "623c3c2f1eca5ad5fca6c58a",
+      "protocol": "https",
+      "api_prefix": "/api-meeting/v1/meeting",
+      "path_token_probe": "/api-meeting/v1/meeting/platform/",
+      "group": "Application",
+      "etherpad": "https://etherpad.openeuler.org/p/Application"
+    },
+    "openUBMC": {
+      "host_url": "openubmc-website.test.osinfra.cn",
+      "user_url": "openubmc-usercenter.test.osinfra.cn",
+      "client_id": "672b25d8b92861baa16ce1e3",
+      "protocol": "https",
+      "api_prefix": "/api-meeting/v1/meeting",
+      "path_token_probe": "/api-meeting/v1/meeting/platform/",
+      "group": "infrastructure",
+      "etherpad": "https://etherpad.openubmc.cn/p/infrastructrue"
+    },
+    "mindspore": {
+      "host_url": "mindspore-website.test.osinfra.cn",
+      "user_url": "mindspore-usercenter.test.osinfra.cn",
+      "client_id": "678e12840a894118623d1f2c",
+      "protocol": "https",
+      "api_prefix": "/api-meeting/v1/meeting",
+      "path_token_probe": "/api-meeting/v1/meeting/platform/",
+      "group": "test",
+      "etherpad": "https://etherpad.mindspore.cn/p/test"
+    },
+    "ascend": {
+      "host_url": "ascend.test.osinfra.cn",
+      "user_url": "id.ascend.test.osinfra.cn",
+      "client_id": "102457327",
+      "protocol": "https",
+      "api_prefix": "/ascend-meeting",
+      "path_token_probe": "/ascend-meeting/platform/",
+      "group": "sig-RecSDK",
+      "etherpad": "https://etherpad.ascend.test.osinfra.cn/p/sig-RecSDK"
+    },
+    "unifiedbus": {
+      "host_url": "unifiedbus.test.osinfra.cn",
+      "user_url": "id.unifiedbus.test.osinfra.cn",
+      "client_id": "68a5825f4f008658ee22e148",
+      "protocol": "https",
+      "api_prefix": "/api/v1/meeting",
+      "path_token_probe": "/api/v1/meeting/platform/",
+      "group": "品牌营销组",
+      "etherpad": "https://etherpad.unifiedbus.test.osinfra.cn/p/group-brandMarketing"
+    }
+  }
+}
