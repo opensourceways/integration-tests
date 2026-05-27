@@ -1,42 +1,13 @@
 #!/bin/bash
-# Run all openEuler community specific tests
+# Run base community integration tests (foundation; pytest test_cases.py)
 set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BASE_DIR="$(dirname "$SCRIPT_DIR")/base_community"
-
-echo "=== Running openEuler Community Tests ==="
+echo "=== Running Base Community Tests ==="
 echo "Test directory: ${SCRIPT_DIR}"
 echo ""
-
-# Step 1: Run base community tests first
-if [[ -d "$BASE_DIR" && -f "${BASE_DIR}/run_all.sh" ]]; then
-    echo "--- Step 1: Running base community tests first ---"
-    bash "${BASE_DIR}/run_all.sh"
-    echo ""
+if [[ -f "${SCRIPT_DIR}/test_cases.py" ]]; then
+    echo "--- Running pytest test_cases.py ---"
+    pytest "${SCRIPT_DIR}/test_cases.py" -v -ra
+else
+    echo "(base_community 暂无 test_cases.py，本社区无可执行用例)"
 fi
-
-# Step 2: Run openEuler specific tests
-PASS=0
-FAIL=0
-TOTAL=0
-
-for test_file in "${SCRIPT_DIR}"/test_*.sh; do
-    [[ -f "$test_file" ]] || continue
-    TOTAL=$((TOTAL + 1))
-    test_name="$(basename "$test_file")"
-    echo "Running: ${test_name}"
-    if bash "$test_file"; then
-        echo "  PASS"
-        PASS=$((PASS + 1))
-    else
-        echo "  FAIL"
-        FAIL=$((FAIL + 1))
-    fi
-done
-
-echo ""
-echo "=== openEuler Specific Results ==="
-echo "Total: ${TOTAL} | Pass: ${PASS} | Fail: ${FAIL}"
-
-[[ ${FAIL} -eq 0 ]]

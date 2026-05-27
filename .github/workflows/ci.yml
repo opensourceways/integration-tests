@@ -13,7 +13,11 @@ jobs:
     name: Meeting Server - Base Community Tests
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test deps
+        run: pip install pytest requests cryptography urllib3 python-dotenv
       - name: Run base community tests
         run: |
           chmod +x services/meeting-server/base_community/run_all.sh
@@ -24,7 +28,11 @@ jobs:
     name: Meeting Server - openEuler Community Tests
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test deps
+        run: pip install pytest requests cryptography urllib3 python-dotenv
       - name: Run openEuler community tests
         run: |
           chmod +x services/meeting-server/openeuler_community/run_all.sh
