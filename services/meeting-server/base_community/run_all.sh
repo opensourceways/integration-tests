@@ -1,22 +1,13 @@
 #!/bin/bash
-# Run all openEuler community specific tests
+# Run all base community tests (foundation; no recursion into itself)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BASE_DIR="$(dirname "$SCRIPT_DIR")/base_community"
 
-echo "=== Running openEuler Community Tests ==="
+echo "=== Running Base Community Tests ==="
 echo "Test directory: ${SCRIPT_DIR}"
 echo ""
 
-# Step 1: Run base community tests first
-if [[ -d "$BASE_DIR" && -f "${BASE_DIR}/run_all.sh" ]]; then
-    echo "--- Step 1: Running base community tests first ---"
-    bash "${BASE_DIR}/run_all.sh"
-    echo ""
-fi
-
-# Step 2: Run openEuler specific tests
 PASS=0
 FAIL=0
 TOTAL=0
@@ -36,7 +27,7 @@ for test_file in "${SCRIPT_DIR}"/test_*.sh; do
 done
 
 echo ""
-echo "=== openEuler Specific Results ==="
+echo "=== Base Community Results ==="
 echo "Total: ${TOTAL} | Pass: ${PASS} | Fail: ${FAIL}"
 
 [[ ${FAIL} -eq 0 ]]
