@@ -1,42 +1,21 @@
 #!/bin/bash
-# Run all openEuler community specific tests (base community first)
+# Run openEuler community integration tests (base community first, then pytest)
 set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")/base_community"
-
 echo "=== Running openEuler Community Tests ==="
 echo "Test directory: ${SCRIPT_DIR}"
 echo ""
-
-# Step 1: Run base community tests first (guard against self-reference)
-if [[ "$BASE_DIR" != "$SCRIPT_DIR" && -d "$BASE_DIR" && -f "${BASE_DIR}/run_all.sh" ]]; then
+# Step 1: base community first (guard against self-reference)
+if [[ "$BASE_DIR" != "$SCRIPT_DIR" && -f "${BASE_DIR}/run_all.sh" ]]; then
     echo "--- Step 1: Running base community tests first ---"
     bash "${BASE_DIR}/run_all.sh"
     echo ""
 fi
-
-# Step 2: Run openEuler specific tests
-PASS=0
-FAIL=0
-TOTAL=0
-
-for test_file in "${SCRIPT_DIR}"/test_*.sh; do
-    [[ -f "$test_file" ]] || continue
-    TOTAL=$((TOTAL + 1))
-    test_name="$(basename "$test_file")"
-    echo "Running: ${test_name}"
-    if bash "$test_file"; then
-        echo "  PASS"
-        PASS=$((PASS + 1))
-    else
-        echo "  FAIL"
-        FAIL=$((FAIL + 1))
-    fi
-done
-
-echo ""
-echo "=== openEuler Specific Results ==="
-echo "Total: ${TOTAL} | Pass: ${PASS} | Fail: ${FAIL}"
-
-[[ ${FAIL} -eq 0 ]]
+# Step 2: this community's pytest suite (conftest 在无可用服务/凭据时 pytest.skip，不会 FAIL)
+if [[ -f "${SCRIPT_DIR}/test_cases.py" ]]; then
+    echo "--- Step 2: Running pytest test_cases.py ---"
+    pytest "${SCRIPT_DIR}/test_cases.py" -v -ra
+else
+    echo "(openeuler_community 暂无 test_cases.py)"
+fi
