@@ -6,7 +6,7 @@ name: 测试交付件评审
 #   - 不通过 → 在草稿 PR 回评问题清单，触发人工评审确认（人工推修订后 synchronize 自动重审）
 #
 # 触发用 pull_request（不是 issue_comment）——天然无评论回环问题。
-# Agent 来自 agent-development-specification: spec/teams/agents/tester/Test-Review-Agent.md
+# Agent 来自 agent-development-specification: spec/teams/agents/test-designer/Test-Review-Agent.md
 
 on:
   pull_request:
@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ${RUNNER_TEMP}/review
-          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/tester/Test-Review-Agent.md" \
+          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/test-designer/Test-Review-Agent.md" \
             -H "Accept: application/vnd.github.raw" > ${RUNNER_TEMP}/review/agent.md
           wc -c ${RUNNER_TEMP}/review/agent.md
 
