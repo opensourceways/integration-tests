@@ -71,7 +71,7 @@ RUN_TAG = f"{int(time.time()) % 1_000_000}-{os.getpid() % 10_000}"
 def _build_single_meeting_body(
     topic=None, agenda="自动化测试", date=None,
     start="09:00", end="09:30", group_name=GROUP_NAME,
-    platform="WELINK", drop_keys=None, extra=None, slot=0,
+    platform="WeLink", drop_keys=None, extra=None, slot=0,
 ):
     if topic is None:
         topic = f"testcase-{COMMUNITY}-{RUN_TAG}-{slot}"
@@ -100,7 +100,7 @@ def _build_single_meeting_body(
 
 
 def _build_cycle_meeting_body(
-    cycle_type=2, cycle_interval=1, cycle_point="15",
+    cycle_type=1, cycle_interval=1, cycle_point="6",
     topic=None, slot=0,
 ):
     if topic is None:
@@ -115,10 +115,10 @@ def _build_cycle_meeting_body(
         "cycle_end_date": next_month_first_day_plus(30),
         "cycle_start": f"{sh:02d}:00",
         "cycle_end": f"{sh + 1:02d}:00",
-        "cycle_point": cycle_point if cycle_type == 2 else None,
+        "cycle_point": cycle_point if cycle_type == 1 or 2 else None,
         "agenda": "自动化测试-周期会议",
         "email_list": "",
-        "platform": "WELINK",
+        "platform": "WeLink",
         "topic": topic,
         "group_name": GROUP_NAME,
         "etherpad": ETHERPAD,
@@ -247,8 +247,7 @@ class TestMeetingCreate:
 
     def test_003_week_cycle(self, login_creds, cleanup_meetings):
         """[正常流][P0] 创建周周期会议（cycle_type=1）"""
-        body = _build_cycle_meeting_body(cycle_type=1, slot=3)
-        body.pop("cycle_point", None)
+        body = _build_cycle_meeting_body(cycle_type=1, cycle_point="6",slot=3)
         resp = _post_meeting(login_creds, body)
         assert resp.status_code == 200
         mid = _extract_meeting_id(resp.json())
