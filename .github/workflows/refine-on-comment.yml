@@ -60,7 +60,7 @@ jobs:
       - name: Fetch TSE review agent spec
         if: steps.files.outputs.found == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
           SPEC_REPO: agentic-develop-playground/agent-development-specification
         run: |
           set -euo pipefail
@@ -162,7 +162,7 @@ jobs:
       - name: PASS → promote draft to ready + merge
         if: steps.files.outputs.found == 'true' && steps.review.outputs.verdict == 'PASS'
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -177,7 +177,7 @@ jobs:
       - name: FAIL → comment issues, request human review
         if: steps.files.outputs.found == 'true' && steps.review.outputs.verdict != 'PASS'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -195,7 +195,7 @@ jobs:
       - name: Comment — infra failure
         if: failure()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
