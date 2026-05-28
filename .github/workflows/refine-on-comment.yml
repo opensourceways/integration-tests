@@ -234,8 +234,13 @@ jobs:
           OPENCODE_MODEL: alibaba-cn/glm-5
           GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
           REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          REVISE_COUNT: ${{ steps.files.outputs.revise_count }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          # Pre-clean scratch left from previous runs on the same self-hosted workspace.
+          rm -f .revise-summary.md
           python3 - <<'PY'
           import os, pathlib, subprocess, sys
           RT = os.environ["RUNNER_TEMP"]
@@ -245,7 +250,7 @@ jobs:
           for t in targets:
               kind = "模块测试策略" if t.endswith("TestStrategy.md") else "模块全量用例脚本"
               lines.append(f"- {kind}：{t}")
-          lines += ["","按「修订模式」规则就地修改这些文件；只改反馈涉及的部分；保留其他来源既有条目；不要写任何 meta / 过程性内容。"]
+          lines += ["","按「修订模式」规则就地修改这些文件；只改反馈涉及的部分；保留其他来源既有条目；不要写任何 meta / 过程性内容。","","另外按 agent 修订模式要求写一份简短 `.revise-summary.md`（仓库根，≤12 行）逐条对应反馈说明本轮实际改动——workflow 会把它作为 PR 评论回贴。"]
           prompt = role + "\n\n" + "\n".join(lines)
           print("::group::opencode revise prompt"); print(prompt); print("::endgroup::", flush=True)
           r = subprocess.run(["opencode","run","--model",os.environ.get("OPENCODE_MODEL","alibaba-cn/glm-5"),
@@ -260,10 +265,25 @@ jobs:
           while IFS= read -r f; do [ -f "$f" ] && git add -- "$f"; done < target-files.txt
           if git diff --cached --quiet; then
             echo "::notice::auto-revise produced no change."
+            rm -f .revise-summary.md
             exit 0
           fi
           git commit -m "test(integration): auto-revise per TSE review [auto-revise]"
           git push
+          # 把 agent 写的修订汇总作为评论回贴到 PR（本仓无 issue_comment 触发，
+          # GEORGE_TOKEN 即 GeorgeCao-hw 身份发出即可，不需要 BOT_TOKEN 切换）。
+          if [ -s .revise-summary.md ]; then
+            NEXT=$((REVISE_COUNT + 1))
+            {
+              printf '🛠 \`测试交付件评审\` 第 %s/3 轮自动修订已推送：\n\n' "$NEXT"
+              cat .revise-summary.md
+              printf '\n\n— run：%s\n' "$RUN_URL"
+            } > "${RUNNER_TEMP}/revise-summary-comment.md"
+            gh pr comment "$PR_NUM" --repo "$REPO" --body-file "${RUNNER_TEMP}/revise-summary-comment.md" || true
+          else
+            echo "::warning::agent did not produce .revise-summary.md; skipping summary comment."
+          fi
+          rm -f .revise-summary.md
 
       - name: Comment — infra failure
         if: failure()
