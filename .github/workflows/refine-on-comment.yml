@@ -1,12 +1,17 @@
 name: 测试交付件评审
 
-# TSE 自动评审：当模块融合草稿 PR（含 services/<module>/ 测试交付件）出现或更新时，
+# TSE 自动评审 + 自动修订：当模块融合草稿 PR（含 services/<module>/ 测试交付件）出现或更新时，
 # 由测试 TSE agent 评审模块测试策略 + 模块全量用例：
 #   - 通过 → gh pr ready + gh pr merge（自动转正式并合入）
-#   - 不通过 → 在草稿 PR 回评问题清单，触发人工评审确认（人工推修订后 synchronize 自动重审）
+#   - 不通过 且自动修订未满 3 轮 → 回评问题清单 + 调 Integration-Test-Agent 按裁决就地修订
+#   - 不通过 且已修订满 3 轮（第 4 次评审仍 FAIL）→ 回复「测试设计不合格，请重新设计提交。」，不再修订
 #
 # 触发用 pull_request（不是 issue_comment）——天然无评论回环问题。
-# Agent 来自 agent-development-specification: spec/teams/agents/test-designer/Test-Review-Agent.md
+# ⚠️ 防死循环：自动修订 commit 带 [auto-revise] 标记，按本 PR 的 [auto-revise] 提交数计轮，
+#    最多 3 轮；满 3 轮后第 4 次评审仍 FAIL 时走拒绝分支、不再 push → 闭环终止。
+# Agent 来自 agent-development-specification:
+#   评审 spec/teams/agents/test-designer/Test-Review-Agent.md
+#   修订 spec/teams/agents/test-designer/Integration-Test-Agent.md（修订模式）
 
 on:
   pull_request:
@@ -21,7 +26,8 @@ permissions:
 
 concurrency:
   group: review-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  # false：自动修订 push 会触发 synchronize 重审，不能把重审 run 取消掉。
+  cancel-in-progress: false
 
 jobs:
   review:
@@ -54,10 +60,23 @@ jobs:
             exit 0
           fi
           echo "found=true" >> "$GITHUB_OUTPUT"
+          # 防死循环（务必保持）：统计本 PR 已发生的自动修订轮数 = 带 [auto-revise]
+          # 标记的提交数。上限 3 轮：满 3 轮后第 4 次评审若仍 FAIL，直接回复拒绝、
+          # 不再自动修订 → 闭环终止。
+          REVISE_COUNT=$(gh pr view "$PR_NUM" --repo "$REPO" --json commits \
+            -q '[.commits[] | select(.messageHeadline | contains("[auto-revise]"))] | length')
+          echo "revise_count=$REVISE_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$REVISE_COUNT" -lt 3 ]; then
+            echo "can_revise=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_revise=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::auto-revise budget exhausted ($REVISE_COUNT/3); a FAIL will reject."
+          fi
+          echo "::notice::auto-revise rounds so far: $REVISE_COUNT (cap 3)"
           echo "Review targets:"
           cat target-files.txt
 
-      - name: Fetch TSE review agent spec
+      - name: Fetch agent specs (TSE reviewer + integration-test reviser)
         if: steps.files.outputs.found == 'true'
         env:
           GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
@@ -67,7 +86,10 @@ jobs:
           mkdir -p ${RUNNER_TEMP}/review
           gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/test-designer/Test-Review-Agent.md" \
             -H "Accept: application/vnd.github.raw" > ${RUNNER_TEMP}/review/agent.md
-          wc -c ${RUNNER_TEMP}/review/agent.md
+          # 修订模式用：FAIL 时按裁决就地改模块交付件。
+          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/test-designer/Integration-Test-Agent.md" \
+            -H "Accept: application/vnd.github.raw" > ${RUNNER_TEMP}/review/reviser.md
+          wc -c ${RUNNER_TEMP}/review/*.md
 
       - name: Setup opencode
         if: steps.files.outputs.found == 'true'
@@ -174,23 +196,74 @@ jobs:
           gh pr ready "$PR_NUM" --repo "$REPO"
           gh pr merge "$PR_NUM" --repo "$REPO" --merge --admin --delete-branch
 
-      - name: FAIL → comment issues, request human review
+      - name: FAIL → comment issues (or reject when revise budget exhausted)
         if: steps.files.outputs.found == 'true' && steps.review.outputs.verdict != 'PASS'
         env:
           GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
+          REVISE_COUNT: ${{ steps.files.outputs.revise_count }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          {
-            echo "❌ \`测试交付件评审\`（TSE）未通过 — 请人工评审确认以下问题，修订后推送（推送会自动重审）："
-            echo
-            cat .review-verdict.md
-            echo
-            echo "run 日志：${RUN_URL}"
-          } > "${RUNNER_TEMP}/review-comment.md"
+          if [ "${REVISE_COUNT:-0}" -ge 3 ]; then
+            # 已自动修订 3 轮、第 4 次评审仍 FAIL → 直接判不合格，交还人工重新设计。
+            {
+              echo "测试设计不合格，请重新设计提交。"
+              echo
+              echo "（TSE 已自动修订 3 轮仍未通过；详见历次评审意见与 run：${RUN_URL}）"
+            } > "${RUNNER_TEMP}/review-comment.md"
+          else
+            NEXT=$((REVISE_COUNT + 1))
+            {
+              echo "❌ \`测试交付件评审\`（TSE）未通过（将进行第 ${NEXT}/3 轮自动修订）："
+              echo
+              cat .review-verdict.md
+              echo
+              echo "下面自动调用 Integration-Test-Agent 按以上意见修订；满 3 轮仍未通过将判定不合格。"
+              echo
+              echo "run 日志：${RUN_URL}"
+            } > "${RUNNER_TEMP}/review-comment.md"
+          fi
           gh pr comment "$PR_NUM" --repo "$REPO" --body-file "${RUNNER_TEMP}/review-comment.md" || true
+
+      - name: FAIL → auto-revise via Integration-Test-Agent (bounded, ≤3 rounds)
+        if: steps.files.outputs.found == 'true' && steps.review.outputs.verdict != 'PASS' && steps.files.outputs.can_revise == 'true'
+        env:
+          HOME: /home/runner
+          OPENCODE_MODEL: alibaba-cn/glm-5
+          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys
+          RT = os.environ["RUNNER_TEMP"]
+          role = pathlib.Path(f"{RT}/review/reviser.md").read_text(encoding="utf-8")
+          targets = [l.strip() for l in pathlib.Path("target-files.txt").read_text().splitlines() if l.strip()]
+          lines = ["================ 本次任务（修订模式）================","","【反馈来源】TSE 评审裁决，反馈正文见：.review-verdict.md","","【待修订的既有模块交付件】（Read 后就地改）"]
+          for t in targets:
+              kind = "模块测试策略" if t.endswith("TestStrategy.md") else "模块全量用例脚本"
+              lines.append(f"- {kind}：{t}")
+          lines += ["","按「修订模式」规则就地修改这些文件；只改反馈涉及的部分；保留其他来源既有条目；不要写任何 meta / 过程性内容。"]
+          prompt = role + "\n\n" + "\n".join(lines)
+          print("::group::opencode revise prompt"); print(prompt); print("::endgroup::", flush=True)
+          r = subprocess.run(["opencode","run","--model",os.environ.get("OPENCODE_MODEL","alibaba-cn/glm-5"),
+                              "--agent","build","--dangerously-skip-permissions","--thinking=false", prompt], text=True)
+          if r.returncode != 0:
+              print(f"::error::opencode exited {r.returncode}", file=sys.stderr); sys.exit(r.returncode)
+          PY
+          git config user.name "GeorgeCao-hw"
+          git config user.email "57275663+GeorgeCao-hw@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          rm -f .review-verdict.md   # never commit the verdict scratch file
+          while IFS= read -r f; do [ -f "$f" ] && git add -- "$f"; done < target-files.txt
+          if git diff --cached --quiet; then
+            echo "::notice::auto-revise produced no change."
+            exit 0
+          fi
+          git commit -m "test(integration): auto-revise per TSE review [auto-revise]"
+          git push
 
       - name: Comment — infra failure
         if: failure()
