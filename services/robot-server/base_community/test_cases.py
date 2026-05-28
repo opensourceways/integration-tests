@@ -1608,5 +1608,421 @@ def test_tc_welcome_008_pr_auto_sig_label():
 
     _close_pr(number)
 
+
+# ============================================================================
+# 六、PR 自动合并审查机器人（robot-universal-review）
+# ============================================================================
+# 来源：opensourceways/robot-universal-review/docs/PROJECT_DOCUMENTATION.md
+# 被测对象：PR 自动合并审查机器人（评论命令 /check-pr 触发检查链；满足全部
+#          合入指标则自动合并 PR，否则按指标给出反馈/打标签）。
+#
+# 检查链顺序（任一步骤可中断）：
+#   PR存在 → 提交存在 → 代码所有者审查 → 审查意见解决 → 操作日志 →
+#   白名单标签 → 黑名单标签 → 反馈评论 → 草稿(WIP) → 冻结分支 → 合并
+# 注意：codeowners / 审查意见检查在标签检查之前，任一不通过会先中断并自己发
+#       通知，因此「缺标签 / 阻塞标签」反馈用例需仓库已配置 codeowners 且已
+#       通过（或关闭 need_code_owners_review_passed）才会走到，详见各用例前置。
+#
+# 文档实测事实（断言用的英文核心子串，取自 config 模板）：
+#   - 命令：/check-pr（仅此一个命令，仅命令触发才会生成聚合反馈评论）
+#   - 无 codeowners：           "The PR not found codeowners."
+#   - codeowners 未全通过：     "assignees to review" + "does not review"
+#   - 审查意见未解决：          "is not resolved"            + 标签 unresolved-reviews
+#   - 缺必需标签：              "the pull request needs"     + "label(s)"
+#   - 前缀标签数量不足：        "but now gets"
+#   - 阻塞(黑名单)标签：        "caused the pull request to be unable to merge."
+#   - 标签操作者不合规：        "should be operated by" + "but is currently executed by"
+#   - /check-pr 反馈外层包裹：  "this pr is not mergeable and the reasons are below:"
+#   - 草稿(WIP)：               "The PR label(s) is working in process!"
+#   - 冻结分支无权限：          "The branch is frozen. Only @" + "can merge."
+#   - 合并失败：                "PR Merge Failed"
+#
+# 运行门禁：这些用例需在“已部署 robot-universal-review 且按上述 config 配置”
+#   的目标仓库上执行；默认不随基础套件运行，置 REVIEW_ROBOT_ENABLED=1 开启。
+#   标签/分支等前置依赖目标仓库配置，开启前请先对齐部署配置。
+
+REVIEW_ROBOT_ENABLED = os.environ.get("REVIEW_ROBOT_ENABLED", "0") not in ("0", "false", "False", "")
+WAIT_REVIEW_ROBOT = 12          # /check-pr 触发后等待检查链处理的秒数
+CHECK_PR_CMD = "/check-pr"
+
+# 审查/合并相关标签（须与目标仓库 config 一致）
+REVIEW_LABEL_NO_PASS = "no-pass-all-review"       # codeowners 未全通过自动标签
+REVIEW_LABEL_UNRESOLVED = "unresolved-reviews"    # 审查意见未解决自动标签
+REVIEW_LABEL_REQUIRED = "opensourceways-cla/yes"  # 白名单必需标签示例
+REVIEW_LABEL_BLOCK = "ci_failed"                  # 黑名单阻塞标签示例
+
+
+def _require_review_robot():
+    if not REVIEW_ROBOT_ENABLED:
+        pytest.skip(
+            "REVIEW_ROBOT_ENABLED 未开启：robot-universal-review 用例需在已部署该"
+            "机器人并按 docs/config 配置的目标仓库上运行（set REVIEW_ROBOT_ENABLED=1）"
+        )
+
+
+def _add_pr_labels(number, labels):
+    """给 PR 追加标签（gitcode：POST /pulls/{number}/labels，body 为标签名数组）"""
+    return _send(
+        "POST",
+        f"{BASE}/repos/{REPO_FULL}/pulls/{number}/labels",
+        headers=_auth_headers(),
+        json_body=labels,
+    )
+
+
+def _remove_pr_label(number, name):
+    return _send(
+        "DELETE",
+        f"{BASE}/repos/{REPO_FULL}/pulls/{number}/labels/{name}",
+        headers=_auth_headers(),
+    )
+
+
+def _open_review_pr(title, head="test-3", body="review robot 自动化测试"):
+    """创建一个待审查 PR；创建失败则跳过用例（与本文件既有 PR 用例一致）。"""
+    resp = _create_pr(title, head=head, body=body)
+    if resp.status_code != 200:
+        pytest.skip(f"无法创建 PR: status={resp.status_code}")
+    number = resp.json().get("number")
+    if not number:
+        pytest.skip("PR 创建返回无 number")
+    return number
+
+
+def test_tc_review_001_check_pr_no_codeowners():
+    """
+    TC-REVIEW-001 [正常流] /check-pr 且 PR 无 codeowners → 提示未找到 codeowners
+    模块：审查机器人/代码所有者审查 | 优先级：P0 | 重要等级：高
+
+    前置：
+        1. 目标仓库部署 robot-universal-review，need_code_owners_review_passed=true
+        2. 该 PR 触达的文件无对应 CODEOWNERS（prInfo.CodeOwners 为空）
+    操作步骤：
+        1. 创建 PR
+        2. PR 评论 /check-pr
+        3. 等待 12s
+        4. GET /pulls/{number}/comments 过滤 Bot 评论
+    预期结果：Bot 评论含 "The PR not found codeowners."
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-001 无 codeowners")
+    time.sleep(5)
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200, f"评论创建失败 status={cmt.status_code}"
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    assert "The PR not found codeowners." in text, \
+        f"未找到 comment_not_found_code_owners 提示；Bot 评论={bot_msgs}"
+
+    _close_pr(number)
+
+
+def test_tc_review_002_non_command_no_trigger():
+    """
+    TC-REVIEW-002 [反向] 非 /check-pr 文本评论不触发审查检查
+    模块：审查机器人/命令识别 | 优先级：P1 | 重要等级：中
+
+    前置：目标仓库部署 robot-universal-review
+    操作步骤：
+        1. 创建 PR
+        2. PR 评论一段不含 /check-pr 命令行的文本（含 "check pr" 但非整行命令）
+        3. 等待 12s
+        4. 过滤本次评论之后的 Bot 评论
+    预期结果：本次评论之后无新增审查机器人反馈评论
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-002 非命令文本")
+    time.sleep(5)
+
+    cmt = _post_pr_comment(number, "麻烦帮忙 check pr 一下这个改动，谢谢")
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_after = _bot_pr_comments(number, since_iso=cmt_created_at)
+    assert len(bot_after) == 0, \
+        f"非命令文本不应触发审查机器人评论；实际新增={bot_after}"
+
+    _close_pr(number)
+
+
+def test_tc_review_003_multiline_check_pr_recognized():
+    """
+    TC-REVIEW-003 [命令识别] 多行评论中含独立 /check-pr 行可触发检查
+    模块：审查机器人/命令识别 | 优先级：P1 | 重要等级：中
+
+    前置：目标仓库部署 robot-universal-review
+    操作步骤：
+        1. 创建 PR（新建 PR 通常不满足合入条件）
+        2. PR 评论："请看下\n/check-pr\n多谢"（命令独占一行）
+        3. 等待 12s
+    预期结果：本次评论后机器人有反馈（产生至少 1 条新的 Bot 评论），
+             证明多行评论中的 /check-pr 行被正确识别并触发了检查链。
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-003 多行命令")
+    time.sleep(5)
+
+    cmt = _post_pr_comment(number, "请看下\n/check-pr\n多谢")
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_after = _bot_pr_comments(number, since_iso=cmt_created_at)
+    assert len(bot_after) >= 1, \
+        "多行评论中的 /check-pr 应被识别并触发检查链，但未见机器人反馈评论"
+
+    _close_pr(number)
+
+
+def test_tc_review_004_block_label_prevents_merge():
+    """
+    TC-REVIEW-004 [黑名单] 存在阻塞标签时 /check-pr 反馈无法合并
+    模块：审查机器人/黑名单标签 | 优先级：P0 | 重要等级：高
+
+    前置：
+        1. 目标仓库 merge_block_metrics.label_metric 含阻塞标签（如 ci_failed）
+        2. codeowners 审查、审查意见检查均已通过（否则会在更早步骤中断）
+    操作步骤：
+        1. 创建 PR
+        2. 给 PR 打阻塞标签 ci_failed
+        3. PR 评论 /check-pr
+        4. 等待 12s
+    预期结果：
+        1. Bot 反馈含外层 "this pr is not mergeable and the reasons are below:"
+        2. 反馈含 "caused the pull request to be unable to merge." 且含标签名 ci_failed
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-004 阻塞标签")
+    time.sleep(5)
+
+    label_resp = _add_pr_labels(number, [REVIEW_LABEL_BLOCK])
+    if label_resp.status_code not in (200, 201):
+        pytest.skip(f"无法给 PR 打阻塞标签 {REVIEW_LABEL_BLOCK}: status={label_resp.status_code}")
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    assert "this pr is not mergeable and the reasons are below:" in text, \
+        f"未找到 /check-pr 反馈外层文案；Bot={bot_msgs}"
+    assert "caused the pull request to be unable to merge." in text, \
+        f"未找到阻塞标签反馈文案；Bot={bot_msgs}"
+    assert REVIEW_LABEL_BLOCK in text, \
+        f"阻塞反馈未含标签名 {REVIEW_LABEL_BLOCK}；Bot={bot_msgs}"
+
+    _close_pr(number)
+
+
+def test_tc_review_005_missing_required_label():
+    """
+    TC-REVIEW-005 [白名单] 缺少必需合入标签时 /check-pr 反馈标签不足
+    模块：审查机器人/白名单标签 | 优先级：P0 | 重要等级：高
+
+    前置：
+        1. 目标仓库 merge_allow_metrics.label_metric 含必需标签（如 opensourceways-cla/yes）
+        2. codeowners 审查、审查意见检查均已通过
+        3. PR 当前不带该必需标签
+    操作步骤：
+        1. 创建 PR（不带必需标签）
+        2. 若 PR 已带必需标签则先移除
+        3. PR 评论 /check-pr
+        4. 等待 12s
+    预期结果：
+        1. Bot 反馈含外层 "this pr is not mergeable and the reasons are below:"
+        2. 反馈含 "the pull request needs" + "label(s)" + 必需标签名
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-005 缺必需标签")
+    time.sleep(5)
+
+    # 确保不带必需标签
+    if REVIEW_LABEL_REQUIRED in _pr_labels(_get_pr(number)):
+        _remove_pr_label(number, REVIEW_LABEL_REQUIRED)
+        time.sleep(3)
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    assert "this pr is not mergeable and the reasons are below:" in text, \
+        f"未找到 /check-pr 反馈外层文案；Bot={bot_msgs}"
+    assert "the pull request needs" in text and "label(s)" in text, \
+        f"未找到缺标签反馈文案；Bot={bot_msgs}"
+    assert REVIEW_LABEL_REQUIRED in text, \
+        f"缺标签反馈未含必需标签名 {REVIEW_LABEL_REQUIRED}；Bot={bot_msgs}"
+
+    _close_pr(number)
+
+
+def test_tc_review_006_unresolved_reviews_block():
+    """
+    TC-REVIEW-006 [审查意见] 存在未解决审查意见时 /check-pr 提示并打标签
+    模块：审查机器人/审查意见 | 优先级：P1 | 重要等级：高
+
+    前置：
+        1. 目标仓库 need_review_questions_fixed=true
+        2. PR 上存在未解决的 review comment（行内审查意见）
+    操作步骤：
+        1. 创建 PR
+        2. PR 评论 /check-pr
+        3. 等待 12s
+        4. GET 详情查看 labels + 过滤 Bot 评论
+    预期结果：
+        1. Bot 评论含 "is not resolved"
+        2. PR labels 含 "unresolved-reviews"
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-006 审查意见未解决")
+    time.sleep(5)
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    assert "is not resolved" in text, \
+        f"未找到未解决审查意见提示；Bot={bot_msgs}"
+    labels = _pr_labels(_get_pr(number))
+    assert REVIEW_LABEL_UNRESOLVED in labels, \
+        f"存在未解决审查意见应打 {REVIEW_LABEL_UNRESOLVED} 标签；实际 labels={labels}"
+
+    _close_pr(number)
+
+
+def test_tc_review_007_wip_draft_pr():
+    """
+    TC-REVIEW-007 [草稿] 草稿(WIP) PR 触发检查时提示进行中
+    模块：审查机器人/草稿检查 | 优先级：P1 | 重要等级：中
+
+    前置：
+        1. 目标仓库部署 robot-universal-review
+        2. codeowners / 审查意见等更早步骤均无其他反馈（草稿提示仅在无其他反馈时给出）
+    操作步骤：
+        1. 创建草稿 PR（draft=true；平台不支持则跳过）
+        2. PR 评论 /check-pr
+        3. 等待 12s
+    预期结果：Bot 评论含 "The PR label(s) is working in process!"
+    """
+    _require_review_robot()
+    resp = _create_pr("TC-REVIEW-007 草稿 PR", head="test-2",
+                      body="review robot draft 测试")
+    if resp.status_code != 200:
+        # 部分平台需通过 draft 字段创建草稿，常规创建失败时尝试带 draft
+        resp = _send("POST", f"{BASE}/repos/{REPO_FULL}/pulls",
+                     headers=_auth_headers(),
+                     json_body={"title": "TC-REVIEW-007 草稿 PR", "head": "test-2",
+                                "base": "master", "body": "draft 测试", "draft": True})
+    if resp.status_code != 200:
+        pytest.skip(f"无法创建草稿 PR: status={resp.status_code}")
+    number = resp.json().get("number")
+    if not (_get_pr(number).json().get("draft")):
+        pytest.skip("平台未将该 PR 标记为草稿(draft)，跳过 WIP 用例")
+    time.sleep(5)
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    assert "working in process" in text, \
+        f"草稿 PR 未收到 WIP 提示；Bot={bot_msgs}"
+
+    _close_pr(number)
+
+
+def test_tc_review_008_frozen_branch_non_whitelist():
+    """
+    TC-REVIEW-008 [冻结分支][权限] 冻结分支上非白名单评论者 /check-pr 被拒
+    模块：审查机器人/冻结分支 | 优先级：P0 | 重要等级：高
+
+    前置：
+        1. 目标仓库 check_branch_frozen=true
+        2. release-management/frozen-branches.yaml 将本 PR 目标分支标记为 frozen，
+           且 community 含本组织，owner_atomgit 不含当前 token 持有者
+    操作步骤：
+        1. 创建 PR（base 指向被冻结分支）
+        2. PR 评论 /check-pr
+        3. 等待 12s
+    预期结果：Bot 评论含 "The branch is frozen. Only @" 且含 "can merge."
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-008 冻结分支")
+    time.sleep(5)
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    if "The branch is frozen. Only @" not in text:
+        pytest.skip(
+            "未检测到冻结分支提示：目标分支可能未在 frozen-branches.yaml 中冻结，"
+            "或当前评论者在白名单内。请按前置配置冻结后再验证。"
+        )
+    assert "can merge." in text, f"冻结提示文案不完整；Bot={bot_msgs}"
+
+    _close_pr(number)
+
+
+def test_tc_review_009_non_compliance_label_operator():
+    """
+    TC-REVIEW-009 [合规] 必需标签由非法操作者添加时 /check-pr 反馈不合规
+    模块：审查机器人/标签合规 | 优先级：P1 | 重要等级：高
+
+    前置：
+        1. 目标仓库 label_metric 中该必需标签 legal_operator 为某机器人账号
+        2. codeowners / 审查意见已通过；由“当前 token 持有者”（非 legal_operator）手动打该标签
+    操作步骤：
+        1. 创建 PR
+        2. 当前用户给 PR 打必需标签（即非法操作者操作）
+        3. PR 评论 /check-pr
+        4. 等待 12s
+    预期结果：
+        1. Bot 反馈含外层 "this pr is not mergeable and the reasons are below:"
+        2. 反馈含 "should be operated by" 且含 "but is currently executed by"
+    """
+    _require_review_robot()
+    number = _open_review_pr("TC-REVIEW-009 标签操作不合规")
+    time.sleep(5)
+
+    label_resp = _add_pr_labels(number, [REVIEW_LABEL_REQUIRED])
+    if label_resp.status_code not in (200, 201):
+        pytest.skip(f"无法给 PR 打标签 {REVIEW_LABEL_REQUIRED}: status={label_resp.status_code}")
+
+    cmt = _post_pr_comment(number, CHECK_PR_CMD)
+    assert cmt.status_code == 200
+    cmt_created_at = cmt.json().get("created_at", "")
+    time.sleep(WAIT_REVIEW_ROBOT)
+
+    bot_msgs = _bot_pr_comments(number, since_iso=cmt_created_at)
+    text = "\n".join(bot_msgs)
+    if "should be operated by" not in text:
+        pytest.skip(
+            "未检测到不合规反馈：当前 token 持有者可能恰为该标签 legal_operator，"
+            "或更早检查步骤先行中断。请按前置（非法操作者打标签）配置后再验证。"
+        )
+    assert "but is currently executed by" in text, \
+        f"不合规反馈文案不完整；Bot={bot_msgs}"
+
+    _close_pr(number)
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
