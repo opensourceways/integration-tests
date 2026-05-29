@@ -43,6 +43,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          # persist-credentials: false —— 否则 checkout 会把 GITHUB_TOKEN 焊进
+          # http.extraheader（优先级高于 origin URL 的 userinfo），导致 auto-revise
+          # 步骤 set-url 注入的 GEORGE_TOKEN(PAT) 形同虚设、push 实际仍走 GITHUB_TOKEN。
+          # GITHUB_TOKEN push 不触发新 workflow → synchronize 重审不会发生、评审-修订-
+          # 评审循环就此断掉。关掉持久化，PAT 才真正生效。
+          persist-credentials: false
 
       - name: Locate module test deliverables in PR
         id: files
@@ -270,19 +276,26 @@ jobs:
           fi
           git commit -m "test(integration): auto-revise per TSE review [auto-revise]"
           git push
-          # 把 agent 写的修订汇总作为评论回贴到 PR（本仓无 issue_comment 触发，
-          # GEORGE_TOKEN 即 GeorgeCao-hw 身份发出即可，不需要 BOT_TOKEN 切换）。
-          if [ -s .revise-summary.md ]; then
-            NEXT=$((REVISE_COUNT + 1))
+          # 把修订汇总作为评论回贴到 PR（本仓无 issue_comment 触发，GEORGE_TOKEN 即
+          # GeorgeCao-hw 身份发出即可，不需要 BOT_TOKEN 切换）。
+          # agent 偶尔把摘要打到 stdout 而没写 .revise-summary.md：那种情况下用本次
+          # 提交的 diff stat 兜底，确保每轮修订对评审者始终可见，不再静默推送。
+          NEXT=$((REVISE_COUNT + 1))
+          if [ ! -s .revise-summary.md ]; then
+            echo "::warning::agent did not produce .revise-summary.md; falling back to commit diff stat."
             {
-              printf '🛠 \`测试交付件评审\` 第 %s/3 轮自动修订已推送：\n\n' "$NEXT"
-              cat .revise-summary.md
-              printf '\n\n— run：%s\n' "$RUN_URL"
-            } > "${RUNNER_TEMP}/revise-summary-comment.md"
-            gh pr comment "$PR_NUM" --repo "$REPO" --body-file "${RUNNER_TEMP}/revise-summary-comment.md" || true
-          else
-            echo "::warning::agent did not produce .revise-summary.md; skipping summary comment."
+              printf '（本轮修订摘要缺失，以下为本次提交的改动统计）\n\n'
+              printf '```\n'
+              git show --stat --format='%h %s' HEAD
+              printf '```\n'
+            } > .revise-summary.md
           fi
+          {
+            printf '🛠 \`测试交付件评审\` 第 %s/3 轮自动修订已推送：\n\n' "$NEXT"
+            cat .revise-summary.md
+            printf '\n\n— run：%s\n' "$RUN_URL"
+          } > "${RUNNER_TEMP}/revise-summary-comment.md"
+          gh pr comment "$PR_NUM" --repo "$REPO" --body-file "${RUNNER_TEMP}/revise-summary-comment.md" || true
           rm -f .revise-summary.md
 
       - name: Comment — infra failure
