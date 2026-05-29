@@ -110,7 +110,7 @@ def main():
 
         # ADD: state=close → 已完成 → resolved 应被加
         _set_state(num, "close")
-        time.sleep(2)
+        time.sleep(10)
         added, ls = _wait_until(num, True, time.time() + TIMEOUT)
         steps.append((f"状态→{ADD_STATE} 自动加 resolved", added, f"issue_state={ADD_STATE}, 标签={ls}"))
         if not added:
