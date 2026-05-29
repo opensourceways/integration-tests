@@ -118,7 +118,7 @@ def main():
 
         # REMOVE: state=reopen → 进行中 → resolved 应被移除（best-effort，已知 robot 框架对无 type issue 自动 reopen）
         _set_state(num, "reopen")
-        time.sleep(2)
+        time.sleep(10)
         removed, ls2 = _wait_until(num, False, time.time() + TIMEOUT)
         steps.append(("状态→进行中 自动移除 resolved", removed, f"标签={ls2}"))
     finally:
