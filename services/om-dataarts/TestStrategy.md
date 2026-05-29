@@ -96,7 +96,8 @@
   1. 每个配置块包含 `community`、`api`、`robot_user`、`intern_assign`、`success_assign`、`freed_assign`、`intern_completed`、`intern_done` 字段
   2. `api` 字段为有效 GitCode API URL（含 projects 路径）
   3. `robot_user` 数组非空
-- **验证方式**：手动验证 / 配置文件静态检查（CI 环境外依赖）
+- **验证方式**：手动验证 / 配置文件静态检查（CI 环境外依赖，仅手动验证）
+- **自动化边界**：配置文件解析依赖生产环境 GitCode API Token 与网络，暂无法在 CI 环境自动化；后续可考虑配置项 Schema 校验（无网络依赖）
 
 #### 3.1.3 数据库表结构验证
 
@@ -110,7 +111,7 @@
   3. 执行 SQL `\d fact_ascendnpuir_practice`
   4. 对比字段列表与 `fact_openeuler_practice` 结构
 - **预期结果**：
-  1. 三张表均有 14 个字段：uuid、title、html_url、tutor_login、tutor_email、score、sig_name、assign_user、assign_at、status、issue_state、pr_url、created_at、finished_at、expect_complete_date
+  1. 三张表均有 15 个字段：uuid、title、html_url、tutor_login、tutor_email、score、sig_name、assign_user、assign_at、status、issue_state、pr_url、created_at、finished_at、expect_complete_date
   2. `uuid` 为 PRIMARY KEY（text 类型）
   3. `status` 为 varchar(16)，`issue_state` 为 varchar(16)
   4. 时间字段为 timestamptz(6)
@@ -131,6 +132,7 @@
   2. 每张表 COUNT >= 1（至少有 1 条记录）
   3. 日志输出 `Page: N collected.` 进度信息
 - **验证方式**：手动执行 / 集成测试环节（需 GitCode API Token 与生产环境网络）
+- **自动化边界**：数据采集脚本执行需生产环境 GitCode API 与网络连通，暂无法在 CI 环境自动化；集成测试阶段可补充自动化采集任务验证（需准备集成测试专用 Token 与网络）
 
 #### 3.1.5 数据字段完整性验证
 
@@ -171,6 +173,7 @@
 - **预期结果**：
   1. HTTP 状态码 400 或 4xx
   2. 响应包含错误信息（参数校验失败）
+- **自动化覆盖**：TC-API-015（空字符串）、TC-API-017（缺失参数）、TC-API-018（null值）
 
 #### 3.1.8 非法社区名验证
 
@@ -183,8 +186,43 @@
 - **预期结果**：
   1. HTTP 状态码 500 或 4xx
   2. 响应包含错误信息（表不存在或 SQL 执行失败）
+- **自动化覆盖**：TC-API-016（非法社区名）
 
-#### 3.1.9 前端看板社区切换验证
+#### 3.1.9 社区参数异常场景验证
+
+**测试目标**：验证社区参数异常输入场景的安全性。
+
+- **对应 TASK**：TASK-3（异常场景与安全性）
+- **前置条件**：APIMagic 服务正常
+- **操作步骤**：
+  1. 社区名大小写测试：`{"community":"TORCHNPU","page":1}`
+  2. 特殊字符测试：`{"community":"torchnpu; DROP TABLE fact_torchnpu_practice","page":1}`
+  3. SQL 注入测试：`{"community":"torchnpu' OR '1'='1","page":1}`
+- **预期结果**：
+  1. 大小写场景返回正确数据或 4xx 错误
+  2. 特殊字符场景返回 4xx 错误
+  3. SQL 注入场景返回 4xx 错误且不执行恶意语句
+- **自动化覆盖**：TC-API-029（大小写）、TC-API-030（特殊字符）、TC-API-031（SQL注入）
+
+#### 3.1.10 参数类型错误验证
+
+**测试目标**：验证分页参数类型错误时的异常处理。
+
+- **对应 TASK**：TASK-3（异常场景）
+- **前置条件**：APIMagic 服务正常
+- **操作步骤**：
+  1. page 参数类型错误：`{"community":"torchnpu","page":"abc","pageSize":10}`
+  2. pageSize 参数类型错误：`{"community":"torchnpu","page":1,"pageSize":"ten"}`
+  3. 空 JSON 请求体
+  4. 非法 JSON 格式请求体
+- **预期结果**：
+  1. page 类型错误返回 4xx
+  2. pageSize 类型错误返回 4xx
+  3. 空请求体返回 4xx
+  4. 非 JSON 格式返回 4xx
+- **自动化覆盖**：TC-API-037（page类型）、TC-API-038（pageSize类型）、TC-API-039（空请求体）、TC-API-040（非法JSON）
+
+#### 3.1.11 前端看板社区切换验证
 
 **测试目标**：验证看板能切换三个新社区。
 
@@ -200,8 +238,9 @@
   2. 选择后 URL 参数更新为 `community=torchnpu`（对应值）
   3. 表格展示对应社区数据，字段包含标题、导师、认领学生、状态、创建时间等
 - **验证方式**：手动测试 / E2E 测试（需前端环境与浏览器自动化工具）
+- **自动化边界**：后端 API 层已通过 TC-API-012/013/014 覆盖社区数据查询；前端交互逻辑需 E2E 环境，暂不在 CI 自动化范围
 
-#### 3.1.10 数据下载验证
+#### 3.1.12 数据下载验证
 
 **测试目标**：验证 CSV 下载包含完整字段。
 
@@ -216,8 +255,9 @@
   2. CSV 包含 uuid、title、html_url、tutor_login、status、created_at 等字段
   3. 字段数 >= 14，与已有社区下载文件一致
 - **验证方式**：手动测试 / E2E 测试（需前端环境与浏览器自动化工具）
+- **自动化边界**：CSV 导出功能依赖前端文件流处理，需 E2E 环境；后端数据完整性已通过 TC-DB 系列验证
 
-#### 3.1.11 数据一致性验证
+#### 3.1.13 数据一致性验证
 
 **测试目标**：验证看板数据与 GitCode 原始 Issue 一致。
 
@@ -232,8 +272,9 @@
   2. 导师账号、认领学生 95% 以上一致
   3. 状态字段允许因评论解析时序差异存在轻微不一致（> 95%）
 - **验证方式**：手动抽样验证 / 调用 GitCode API 比对（需 GitCode API Token）
+- **自动化边界**：需生产环境 GitCode API Token，暂定为手动验证项；数据字段完整性已通过 TC-DB 系列验证
 
-#### 3.1.12 空数据场景验证
+#### 3.1.14 空数据场景验证
 
 **测试目标**：验证新社区无任务时看板无报错。
 

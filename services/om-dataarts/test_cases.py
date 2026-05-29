@@ -111,12 +111,12 @@ def test_om_dataarts_db_table_torchnpu_exists_004_pr_460(db_conn):
     """)
     columns = cur.fetchall()
     cur.close()
-    assert len(columns) >= 14, f"Expected >=14 columns, got {len(columns)}"
+    assert len(columns) >= 15, f"Expected >=15 columns, got {len(columns)}"
     column_names = [col[0] for col in columns]
     required_fields = [
         "uuid", "title", "html_url", "tutor_login", "tutor_email",
         "score", "sig_name", "assign_user", "assign_at", "status",
-        "issue_state", "pr_url", "created_at", "finished_at"
+        "issue_state", "pr_url", "created_at", "finished_at", "expect_complete_date"
     ]
     for field in required_fields:
         assert field in column_names, f"Missing field: {field}"
@@ -137,12 +137,12 @@ def test_om_dataarts_db_table_openubmc_exists_005_pr_460(db_conn):
     """)
     columns = cur.fetchall()
     cur.close()
-    assert len(columns) >= 14, f"Expected >=14 columns, got {len(columns)}"
+    assert len(columns) >= 15, f"Expected >=15 columns, got {len(columns)}"
     column_names = [col[0] for col in columns]
     required_fields = [
         "uuid", "title", "html_url", "tutor_login", "tutor_email",
         "score", "sig_name", "assign_user", "assign_at", "status",
-        "issue_state", "pr_url", "created_at", "finished_at"
+        "issue_state", "pr_url", "created_at", "finished_at", "expect_complete_date"
     ]
     for field in required_fields:
         assert field in column_names, f"Missing field: {field}"
@@ -163,12 +163,12 @@ def test_om_dataarts_db_table_ascendnpuir_exists_006_pr_460(db_conn):
     """)
     columns = cur.fetchall()
     cur.close()
-    assert len(columns) >= 14, f"Expected >=14 columns, got {len(columns)}"
+    assert len(columns) >= 15, f"Expected >=15 columns, got {len(columns)}"
     column_names = [col[0] for col in columns]
     required_fields = [
         "uuid", "title", "html_url", "tutor_login", "tutor_email",
         "score", "sig_name", "assign_user", "assign_at", "status",
-        "issue_state", "pr_url", "created_at", "finished_at"
+        "issue_state", "pr_url", "created_at", "finished_at", "expect_complete_date"
     ]
     for field in required_fields:
         assert field in column_names, f"Missing field: {field}"
@@ -275,7 +275,7 @@ def test_om_dataarts_api_detail_page_torchnpu_012_pr_460(api_headers):
     required_fields = [
         "uuid", "title", "html_url", "tutor_login", "tutor_email",
         "score", "sig_name", "assign_user", "assign_at", "status",
-        "issue_state", "pr_url", "created_at", "finished_at"
+        "issue_state", "pr_url", "created_at", "finished_at", "expect_complete_date"
     ]
     if len(body["list"]) > 0:
         for item in body["list"]:
@@ -304,7 +304,7 @@ def test_om_dataarts_api_detail_page_openubmc_013_pr_460(api_headers):
     required_fields = [
         "uuid", "title", "html_url", "tutor_login", "tutor_email",
         "score", "sig_name", "assign_user", "assign_at", "status",
-        "issue_state", "pr_url", "created_at", "finished_at"
+        "issue_state", "pr_url", "created_at", "finished_at", "expect_complete_date"
     ]
     if len(body["list"]) > 0:
         for item in body["list"]:
@@ -333,7 +333,7 @@ def test_om_dataarts_api_detail_page_ascendnpuir_014_pr_460(api_headers):
     required_fields = [
         "uuid", "title", "html_url", "tutor_login", "tutor_email",
         "score", "sig_name", "assign_user", "assign_at", "status",
-        "issue_state", "pr_url", "created_at", "finished_at"
+        "issue_state", "pr_url", "created_at", "finished_at", "expect_complete_date"
     ]
     if len(body["list"]) > 0:
         for item in body["list"]:
@@ -748,14 +748,14 @@ def test_om_dataarts_api_detail_page_empty_body_039_pr_460(api_headers):
 
 
 @pytest.mark.p2
-def test_om_dataarts_api_detail_page_invalid_json_040_pr_460():
+def test_om_dataarts_api_detail_page_invalid_json_040_pr_460(api_headers):
     """
     [异常输入] 非 JSON 请求体返回错误
     对应 TASK-3 | 优先级 P2 | 来源 PR #460
     """
     resp = requests.post(
         f"{BASE_API}/server/detail/page",
-        headers={"Content-Type": "application/json"},
+        headers=api_headers,
         data="not a json",
         timeout=10
     )
@@ -802,9 +802,9 @@ if __name__ == "__main__":
 # | TC-DB-009 | fact_ascendnpuir_practice 表有数据 | TASK-2 | P0 | #460 |
 # | TC-DB-010 | Torch-NPU 数据必填字段非空 | TASK-2 | P1 | #460 |
 # | TC-DB-011 | Torch-NPU uuid 格式正确 | TASK-2 | P1 | #460 |
-# | TC-API-012 | 查询 Torch-NPU 社区数据接口返回正确（含14字段验证） | TASK-2 | P0 | #460 |
-# | TC-API-013 | 查询 openUBMC 社区数据接口返回正确（含14字段验证） | TASK-2 | P0 | #460 |
-# | TC-API-014 | 查询 Ascend IR 社区数据接口返回正确（含14字段验证） | TASK-2 | P0 | #460 |
+# | TC-API-012 | 查询 Torch-NPU 社区数据接口返回正确（含15字段验证） | TASK-2 | P0 | #460 |
+# | TC-API-013 | 查询 openUBMC 社区数据接口返回正确（含15字段验证） | TASK-2 | P0 | #460 |
+# | TC-API-014 | 查询 Ascend IR 社区数据接口返回正确（含15字段验证） | TASK-2 | P0 | #460 |
 # | TC-API-015 | 空社区参数返回4xx参数校验失败 | TASK-2 | P1 | #460 |
 # | TC-API-016 | 非法社区名返回500或4xx错误 | TASK-2 | P1 | #460 |
 # | TC-API-017 | 缺失社区参数返回错误 | TASK-2 | P1 | #460 |
