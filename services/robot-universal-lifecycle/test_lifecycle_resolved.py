@@ -67,8 +67,8 @@ def _create_issue():
 
 
 def _get_labels(num):
-    r = _req("GET", f"/repos/{OWNER}/{REPO}/issues/{num}/labels")
-    return [x.get("name") for x in (r or []) if x.get("name")]
+    r = _req("GET", f"/repos/{OWNER}/{REPO}/issues/{num}")
+    return [x.get("name") for x in (r.get("labels") or []) if x.get("name")]
 
 
 def _wait_until(num, want_present, deadline):
@@ -110,7 +110,7 @@ def main():
 
         # ADD: state=close → 已完成 → resolved 应被加
         _set_state(num, "close")
-        time.sleep(20)
+        time.sleep(2)
         added, ls = _wait_until(num, True, time.time() + TIMEOUT)
         steps.append((f"状态→{ADD_STATE} 自动加 resolved", added, f"issue_state={ADD_STATE}, 标签={ls}"))
         if not added:
@@ -118,7 +118,7 @@ def main():
 
         # REMOVE: state=reopen → 进行中 → resolved 应被移除（best-effort，已知 robot 框架对无 type issue 自动 reopen）
         _set_state(num, "reopen")
-        time.sleep(20)
+        time.sleep(2)
         removed, ls2 = _wait_until(num, False, time.time() + TIMEOUT)
         steps.append(("状态→进行中 自动移除 resolved", removed, f"标签={ls2}"))
     finally:
