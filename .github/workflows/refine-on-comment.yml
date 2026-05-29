@@ -190,13 +190,15 @@ jobs:
       - name: PASS → promote draft to ready + merge
         if: steps.files.outputs.found == 'true' && steps.review.outputs.verdict == 'PASS'
         env:
+          # ready/merge 需 PAT(admin 合并)；评论统一用 BOT_TOKEN → github-actions[bot] 发出。
           GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
+          BOT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          gh pr comment "$PR_NUM" --repo "$REPO" --body "✅ \`测试交付件评审与修复\`（TSE）通过 — 自动将草稿 PR 转为正式并合入。
+          GH_TOKEN="$BOT_TOKEN" gh pr comment "$PR_NUM" --repo "$REPO" --body "✅ \`测试交付件评审与修复\`（TSE）通过 — 自动将草稿 PR 转为正式并合入。
 
           run 日志：${RUN_URL}" || true
           gh pr ready "$PR_NUM" --repo "$REPO"
@@ -205,7 +207,8 @@ jobs:
       - name: FAIL → comment issues (or reject when revise budget exhausted)
         if: steps.files.outputs.found == 'true' && steps.review.outputs.verdict != 'PASS'
         env:
-          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
+          # 纯评论步骤：用 GITHUB_TOKEN → github-actions[bot] 发出。
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           REVISE_COUNT: ${{ steps.files.outputs.revise_count }}
@@ -238,7 +241,9 @@ jobs:
         env:
           HOME: /home/runner
           OPENCODE_MODEL: alibaba-cn/glm-5
+          # push 走 PAT(set-url 注入 GEORGE_TOKEN，触发 synchronize 重审)；评论用 BOT_TOKEN。
           GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
+          BOT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           REVISE_COUNT: ${{ steps.files.outputs.revise_count }}
@@ -276,8 +281,8 @@ jobs:
           fi
           git commit -m "test(integration): auto-revise per TSE review [auto-revise]"
           git push
-          # 把 agent 写的修订汇总作为评论回贴到 PR（本仓无 issue_comment 触发，
-          # GEORGE_TOKEN 即 GeorgeCao-hw 身份发出即可，不需要 BOT_TOKEN 切换）。
+          # 把 agent 写的修订汇总作为评论回贴到 PR（用 BOT_TOKEN → github-actions[bot] 发出；
+          # push 已用 GEORGE_TOKEN(PAT) 触发重审，评论身份与 push 身份分开）。
           if [ -s .revise-summary.md ]; then
             NEXT=$((REVISE_COUNT + 1))
             {
@@ -285,7 +290,7 @@ jobs:
               cat .revise-summary.md
               printf '\n\n— run：%s\n' "$RUN_URL"
             } > "${RUNNER_TEMP}/revise-summary-comment.md"
-            gh pr comment "$PR_NUM" --repo "$REPO" --body-file "${RUNNER_TEMP}/revise-summary-comment.md" || true
+            GH_TOKEN="$BOT_TOKEN" gh pr comment "$PR_NUM" --repo "$REPO" --body-file "${RUNNER_TEMP}/revise-summary-comment.md" || true
           else
             echo "::warning::agent did not produce .revise-summary.md; skipping summary comment."
           fi
@@ -294,7 +299,8 @@ jobs:
       - name: Comment — infra failure
         if: failure()
         env:
-          GH_TOKEN: ${{ secrets.GEORGE_TOKEN }}
+          # 纯评论步骤：用 GITHUB_TOKEN → github-actions[bot] 发出。
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
