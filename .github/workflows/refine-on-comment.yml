@@ -1,4 +1,4 @@
-name: 测试交付件评审
+name: 测试交付件评审与修复
 
 # TSE 自动评审 + 自动修订：当模块融合草稿 PR（含 services/<module>/ 测试交付件）出现或更新时，
 # 由测试 TSE agent 评审模块测试策略 + 模块全量用例：
@@ -190,7 +190,7 @@ jobs:
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          gh pr comment "$PR_NUM" --repo "$REPO" --body "✅ \`测试交付件评审\`（TSE）通过 — 自动将草稿 PR 转为正式并合入。
+          gh pr comment "$PR_NUM" --repo "$REPO" --body "✅ \`测试交付件评审与修复\`（TSE）通过 — 自动将草稿 PR 转为正式并合入。
 
           run 日志：${RUN_URL}" || true
           gh pr ready "$PR_NUM" --repo "$REPO"
@@ -216,7 +216,7 @@ jobs:
           else
             NEXT=$((REVISE_COUNT + 1))
             {
-              echo "❌ \`测试交付件评审\`（TSE）未通过（将进行第 ${NEXT}/3 轮自动修订）："
+              echo "❌ \`测试交付件评审与修复\`（TSE）未通过（将进行第 ${NEXT}/3 轮自动修订）："
               echo
               cat .review-verdict.md
               echo
@@ -275,7 +275,7 @@ jobs:
           if [ -s .revise-summary.md ]; then
             NEXT=$((REVISE_COUNT + 1))
             {
-              printf '🛠 \`测试交付件评审\` 第 %s/3 轮自动修订已推送：\n\n' "$NEXT"
+              printf '🛠 \`测试交付件评审与修复\` 第 %s/3 轮自动修订已推送：\n\n' "$NEXT"
               cat .revise-summary.md
               printf '\n\n— run：%s\n' "$RUN_URL"
             } > "${RUNNER_TEMP}/revise-summary-comment.md"
@@ -293,4 +293,4 @@ jobs:
           PR_NUM: ${{ github.event.pull_request.number }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh pr comment "$PR_NUM" --repo "$REPO" --body "⚠️ \`测试交付件评审\` 执行异常（非评审结论），详见 [run 日志](${RUN_URL})。修复后推送或 re-run。" || true
+          gh pr comment "$PR_NUM" --repo "$REPO" --body "⚠️ \`测试交付件评审与修复\` 执行异常（非评审结论），详见 [run 日志](${RUN_URL})。修复后推送或 re-run。" || true
