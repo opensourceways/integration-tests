@@ -10,8 +10,8 @@ name: 测试交付件评审
 # ⚠️ 防死循环：自动修订 commit 带 [auto-revise] 标记，按本 PR 的 [auto-revise] 提交数计轮，
 #    最多 3 轮；满 3 轮后第 4 次评审仍 FAIL 时走拒绝分支、不再 push → 闭环终止。
 # Agent 来自 agent-development-specification:
-#   评审 spec/teams/agents/test-designer/Test-Review-Agent.md
-#   修订 spec/teams/agents/test-designer/Integration-Test-Agent.md（修订模式）
+#   评审 spec/teams/agents/test-review/AGENT.md
+#   修订 spec/teams/agents/integration-test/AGENT.md（修订模式）
 
 on:
   pull_request:
@@ -84,10 +84,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ${RUNNER_TEMP}/review
-          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/test-designer/Test-Review-Agent.md" \
+          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/test-review/AGENT.md" \
             -H "Accept: application/vnd.github.raw" > ${RUNNER_TEMP}/review/agent.md
           # 修订模式用：FAIL 时按裁决就地改模块交付件。
-          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/test-designer/Integration-Test-Agent.md" \
+          gh api "/repos/${SPEC_REPO}/contents/spec/teams/agents/integration-test/AGENT.md" \
             -H "Accept: application/vnd.github.raw" > ${RUNNER_TEMP}/review/reviser.md
           wc -c ${RUNNER_TEMP}/review/*.md
 
