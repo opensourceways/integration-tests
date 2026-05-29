@@ -67,8 +67,8 @@ def _create_issue():
 
 
 def _get_labels(num):
-    r = _req("GET", f"/repos/{OWNER}/{REPO}/issues/{num}/labels")
-    return [x.get("name") for x in (r or []) if x.get("name")]
+    r = _req("GET", f"/repos/{OWNER}/{REPO}/issues/{num}")
+    return [x.get("name") for x in (r.get("labels") or []) if x.get("name")]
 
 
 def _wait_until(num, want_present, deadline):
