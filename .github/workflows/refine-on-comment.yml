@@ -43,6 +43,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          # persist-credentials: false —— 否则 checkout 会把 GITHUB_TOKEN 焊进
+          # http.extraheader，而 extraheader 优先级高于 origin URL 里的 userinfo，
+          # 导致 auto-revise 步骤 set-url 注入的 GEORGE_TOKEN(PAT) 形同虚设、push
+          # 实际仍走 GITHUB_TOKEN。GITHUB_TOKEN push 不触发新 workflow → synchronize
+          # 重审永远不会发生，评审→修复→评审循环就此断掉。关掉持久化，PAT 才真正生效。
+          persist-credentials: false
 
       - name: Locate module test deliverables in PR
         id: files
