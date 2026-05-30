@@ -5,6 +5,7 @@
 | PR 号 | Issue 列表 | 合入时间 | 备注 |
 |-------|-----------|---------|------|
 | [#174](https://github.com/agentic-develop-playground/backlog/pull/174) | 140 | 2026-05-24 | 会议官网列表接口增加历史会议人数显示 |
+| [#502](https://github.com/agentic-develop-playground/backlog/pull/502) | 476 | 2026-05-30 | 会议页面显示，同一个开始时间的会议需要按照会议名称进行排序 |
 
 ---
 
@@ -26,6 +27,7 @@
 > - **目的：** 确保功能实现符合设计预期。
 > - **触发条件：** 强制执行,**可委托开发测试完成，测试完成验收**。
 > - **合入 PR #174（Issue 140）新增**：新增统计接口与公开接口字段，需验证响应结构、数据正确性、边界情况。
+> - **合入 PR #502（Issue 476）新增**：排序逻辑验证、边界值测试（相同 date/start 不同 topic、不同 date/start）、升降序模式验证，确保 topic 作为第三级排序条件正确生效。
 
 - [ ] **体验测试**
 
@@ -176,6 +178,84 @@
   3. meeting_stats 字段正常返回
 - **优先级**: P1
 
+#### 3.1.3 排序逻辑验证（PR #502 / Issue 476）
+
+**对应task链接:** https://github.com/agentic-develop-playground/backlog/issues/476
+
+**测试范围：** `meeting_platform/apps/meeting/application/meeting.py:693` 排序逻辑改动
+
+**测试类型：** 单元测试风格验证（使用本地 mock 数据验证排序算法逻辑，不调用真实后端 API）
+
+> **说明：** TC-API-SORT-001 至 TC-API-SORT-010 采用 Python `sorted()` 函数在本地对 mock 数据进行排序验证，目的是快速验证 `date > start > topic` 排序优先级逻辑的正确性。此方式不依赖后端服务部署，可在 CI 环境独立运行。后端实际排序逻辑由开发人员在 `meeting_platform/apps/meeting/application/meeting.py` 中实现的 Django QuerySet 排序，应由单元测试覆盖（见 §3.1.4）。
+
+**测试用例设计：**
+
+| 用例ID | 用例标题 | 前置条件 | 操作步骤 | 预期结果 | 优先级 |
+|--------|----------|----------|----------|----------|--------|
+| TC-API-SORT-001 | [正常流] 相同date/start按topic升序排列 | 创建3个会议：date/start相同，topic分别为"Gamma"、"Alpha"、"Beta" | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | 返回列表中3个会议按 topic 字母序排列：Alpha → Beta → Gamma | P0 |
+| TC-API-SORT-002 | [边界值] date优先级最高 | 创建会议：date分别为2026-05-30、2026-05-29，topic相同 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | date=2026-05-29 的会议排在 date=2026-05-30 之前（date优先级最高） | P0 |
+| TC-API-SORT-003 | [边界值] start优先级高于topic | 创建会议：date相同，start分别为09:00、08:00，topic按逆序设置 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | start=08:00 的会议排在 start=09:00 之前（start优先级高于topic） | P0 |
+| TC-API-SORT-004 | [正常流] 降序模式topic仍升序 | 创建会议：date/start相同，topic分别为"C会议"、"A会议"、"B会议" | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=desc | date降序排列；相同date的会议按start降序；相同date/start的会议按topic升序 | P0 |
+| TC-API-SORT-005 | [边界值] topic包含中英文混合 | 创建会议：date/start相同，topic分别为"Z会议"、"A会议"、"会议B" | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | 按 MySQL 默认字符集排序规则排列（验证中英文混合场景稳定性） | P1 |
+| TC-API-SORT-006 | [边界值] topic包含特殊字符 | 创建会议：date/start相同，topic分别为"_会议"、"会议"、"会议" | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | 按字符编码顺序排列（验证特殊字符场景稳定性） | P1 |
+| TC-API-SORT-007 | [边界值] topic全相同 | 创建会议：date/start/topic完全相同 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | 返回结果不报错，顺序按数据库默认（如id） | P2 |
+| TC-API-SORT-008 | [正常流] order_by=start时topic作为第二级 | 创建会议：date不同、start相同、topic不同 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=start&order_type=asc | start作为主排序，topic作为第二级排序 | P1 |
+| TC-API-SORT-009 | [空值] topic为空字符串 | 创建会议：date/start相同，topic为空字符串"" | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | 空字符串topic排在最前（验证空值排序稳定性） | P2 |
+| TC-API-SORT-010 | [正常流] 默认order_by参数 | 创建会议：不传order_by参数 | 调用 GET /inner/v1/meeting/meeting/list/ | 默认按date排序，topic作为第三级排序 | P1 |
+
+**预期结果：** 
+1. 所有测试用例返回 HTTP 200，响应结构包含 `{total, list, page, size}`。
+2. 排序逻辑符合验收标准：
+   - 验收条件1：相同 start 时按 topic 字母序升序
+   - 验收条件2：date > start > topic 优先级正确
+   - 验收条件3：order_type=desc 时 topic 仍升序
+   - 验收条件4：原有参数功能不变
+
+#### 3.1.4 单元测试验证（PR #502 / Issue 476）
+
+**对应task链接:** https://github.com/agentic-develop-playground/backlog/issues/476
+
+**测试文件位置：** `meeting_platform/test/meeting/test_meeting_app.py`
+
+**测试类型：** 后端 Django 单元测试（由开发人员编写，验证实际 Django QuerySet 排序逻辑）
+
+**测试步骤：**
+1. 在 meeting-platform 项目根目录执行：`pytest meeting_platform/test/meeting/test_meeting_app.py -v`
+2. 确认以下测试用例执行通过：
+   - `test_merged_meeting_list_sort_by_topic_same_start`：验证相同 start 时按 topic 升序
+   - `test_merged_meeting_list_sort_priority`：验证 date > start > topic 优先级
+   - `test_merged_meeting_list_sort_with_desc`：验证降序模式下 topic 仍升序
+
+**验证方法：**
+- 单元测试应覆盖 `meeting_platform/apps/meeting/application/meeting.py:693` 的 QuerySet 排序逻辑
+- 使用 Django TestCase 创建模拟会议数据，调用 `merged_meeting_list` 方法，断言返回结果顺序符合预期
+- 测试数据需包含：相同 date/start 不同 topic、不同 date、不同 start 等边界场景
+
+**预期结果：** 
+1. `test_merged_meeting_list_sort_by_topic_same_start` 通过
+2. `test_merged_meeting_list_sort_priority` 通过
+3. `test_merged_meeting_list_sort_with_desc` 通过
+4. 单元测试覆盖率 ≥ 原有水平
+
+> **说明：** 本章节描述的单元测试由开发人员在代码提交前编写并执行。测试设计阶段仅定义验证目标，具体实现由开发人员负责。
+
+#### 3.1.5 接口兼容性验证（PR #502 / Issue 476）
+
+**对应task链接:** https://github.com/agentic-develop-playground/backlog/issues/476
+
+**测试范围：** 验证原有接口参数功能不变
+
+**测试用例设计：**
+
+| 用例ID | 用例标题 | 前置条件 | 操作步骤 | 预期结果 | 优先级 |
+|--------|----------|----------|----------|----------|--------|
+| TC-API-COMPAT-001 | [正常流] order_by=date&order_type=asc | 创建多个会议 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=asc | 返回结构包含 `{total, list, page, size}`，list中包含topic字段 | P0 |
+| TC-API-COMPAT-002 | [正常流] order_by=date&order_type=desc | 创建多个会议 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=date&order_type=desc | 返回结构正确，date降序排列 | P0 |
+| TC-API-COMPAT-003 | [正常流] 分页参数 | 创建多个会议 | 调用 GET /inner/v1/meeting/meeting/list/?page=1&size=10 | 返回结构正确，分页参数生效 | P1 |
+| TC-API-COMPAT-004 | [边界值] order_by=start接口验证 | 创建多个会议 | 调用 GET /inner/v1/meeting/meeting/list/?order_by=start&order_type=asc | 返回结构正确，start升序，同start组内topic升序 | P1 |
+
+**预期结果：** 接口返回结构不变，原有参数功能正常。
+
 ### 3.2 体验测试专项
 
 > 参考测试设计方向
@@ -233,7 +313,7 @@
 > 参考测试设计方向
 >
 > - 最小特权原则 (PoLP)：验证服务账户（Service Account）是否无法越权操作未授权的资源。
-> - 软件供应链审计：通过 SBOM 检查，验证容器镜像中是否存在已知的高危 CVE 暴洞。
+> - 软件供应链审计：通过 SBOM 检查，验证容器镜像中是否存在已知的高危 CVE 漏洞。
 > - 敏感信息外泄防护：检查日志、监控指标及 API 报错中是否夹带了明文密钥或隐私数据。
 
 暂无安全与隐私测试需求。
@@ -264,7 +344,7 @@
 >
 > - 吞吐量与时延基准：验证在额定并发下，P99 延迟是否满足服务水平协议（SLA）。
 > - 自动扩缩容效率：验证 HPA（水平扩容）从触发阈值到新副本就绪的响应时间。
-> - 长期稳定性 (Soak Test)：验证在持续负载下，是否存在内存缓慢泄漏或连接数不释放的问题。
+> - 期稳定性 (Soak Test)：验证在持续负载下，是否存在内存缓慢泄漏或连接数不释放的问题。
 
 #### 3.7.1 性能验收测试（PR #174 / Issue 140）
 
