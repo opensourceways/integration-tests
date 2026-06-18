@@ -44,8 +44,8 @@ if _env_file.exists():
 
 TEST_ACCOUNT = os.environ.get("TEST_ACCOUNT", "")
 TEST_PASSWORD = os.environ.get("TEST_PASSWORD", "")
-CORP_ACCOUNT = os.environ.get("CORP_ACCOUNT", "") or "guoxiaozhen@grqy3283.wecom.work"
-CORP_PASSWORD = os.environ.get("CORP_PASSWORD", "") or "Aa123456@"
+CORP_ACCOUNT = os.environ.get("CORP_ACCOUNT", "")
+CORP_PASSWORD = os.environ.get("CORP_PASSWORD", "")
 CORP_NEW_PWD = os.environ.get("CORP_NEW_PWD", "")
 VERIFY_CODE = os.environ.get("VERIFY_CODE", "")
 
