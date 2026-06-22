@@ -30,10 +30,10 @@ from pathlib import Path
 
 BASE_URL = "https://clasign.test.osinfra.cn/index"
 
-TEST_ACCOUNT: ${{ secrets.CLA_TEST_ACCOUNT }}
-PASSWORD: ${{ secrets.CLA_TEST_PASSWORD }}
-CORP_ACCOUNT: ${{ secrets.CLA_CORP_ACCOUNT }}
-CORP_PASSWORD: ${{ secrets.CLA_CORP_ACCOUNT }}
+TEST_ACCOUNT = os.environ.get("CLA_TEST_ACCOUNT", "")
+TEST_PASSWORD = os.environ.get("CLA_TEST_PASSWORD", "")
+CORP_ACCOUNT = os.environ.get("CLA_CORP_ACCOUNT", "")
+CORP_PASSWORD = os.environ.get("CLA_CORP_PASSWORD", "")
 
 
 def _close_cookie_notice(page: Page):
