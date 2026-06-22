@@ -30,18 +30,6 @@ from pathlib import Path
 
 BASE_URL = "https://clasign.test.osinfra.cn/index"
 
-# 从 .env 加载环境变量
-_env_file = Path(__file__).parent / ".env"
-if _env_file.exists():
-    for line in _env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if "=" in line and not line.startswith("#"):
-            key, _, val = line.partition("=")
-            key = key.strip()
-            val = val.strip().strip('"')
-            if key not in os.environ:
-                os.environ[key] = val
-
 TEST_ACCOUNT: ${{ secrets.CLA_TEST_ACCOUNT }}
 PASSWORD: ${{ secrets.CLA_TEST_PASSWORD }}
 CORP_ACCOUNT: ${{ secrets.CLA_CORP_ACCOUNT }}
