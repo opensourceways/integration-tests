@@ -47,11 +47,11 @@ def _close_cookie_notice(page: Page):
         pass
 
 
-def _retry_with_refresh(page: Page, action, attempts: int = 3, wait_ms: int = 2000):
+def _retry_with_refresh(page: Page, action, attempts: int = 5, wait_ms: int = 2000):
     """执行 action（一次元素操作），若元素获取不到（抛异常）则刷新页面后重试。
 
     :param action: 无参回调，内部封装一次元素 wait/click/断言操作
-    :param attempts: 最大尝试次数（含首次），默认 3
+    :param attempts: 最大尝试次数（含首次），默认 5
     :param wait_ms: 刷新后的等待毫秒数，给页面渲染留时间
     """
     for attempt in range(attempts):
@@ -81,7 +81,7 @@ def _click_dropdown_sign(page: Page):
 
 def _do_login(page: Page, account: str, password: str):
     """执行登录操作（账号+密码+复选框+登录按钮），含重试，若登录页面超时则刷新页面"""
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             page.goto(BASE_URL, timeout=30000)
             page.wait_for_load_state("domcontentloaded")
@@ -90,7 +90,7 @@ def _do_login(page: Page, account: str, password: str):
             page.locator('input[placeholder="账号"]').wait_for(state="visible", timeout=20000)
             break
         except Exception:
-            if attempt == 2:
+            if attempt == 4:
                 raise
             # 若登录页面超时或加载异常，刷新页面后重试
             try:
