@@ -44,8 +44,8 @@ if _env_file.exists():
 
 TEST_ACCOUNT: ${{ secrets.CLA_TEST_ACCOUNT }}
 PASSWORD: ${{ secrets.CLA_TEST_PASSWORD }}
-CORP_ACCOUNT = ${{ secrets.CLA_CORP_ACCOUNT }}
-CORP_PASSWORD = ${{ secrets.CLA_CORP_ACCOUNT }}
+CORP_ACCOUNT: ${{ secrets.CLA_CORP_ACCOUNT }}
+CORP_PASSWORD: ${{ secrets.CLA_CORP_ACCOUNT }}
 
 
 def _close_cookie_notice(page: Page):
