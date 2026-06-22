@@ -10,8 +10,8 @@ CLA 签署平台 UI 自动化测试脚本
 环境变量（自动从 CLA/.env 加载）：
     TEST_ACCOUNT     - 社区管理员账号
     TEST_PASSWORD    - 社区管理员密码
-    CORP_ACCOUNT     - 企业管理员账号（默认 guoxiaozhen@grqy3283.wecom.work）
-    CORP_PASSWORD    - 企业管理员密码（默认 Aa123456@）
+    CORP_ACCOUNT     - 企业管理员账号
+    CORP_PASSWORD    - 企业管理员密码
     CORP_NEW_PWD     - 企业管理员重置后新密码
     VERIFY_CODE      - 邮箱验证码
 执行命令：
@@ -46,6 +46,7 @@ TEST_ACCOUNT = os.environ.get("CLA_TEST_ACCOUNT", "")
 TEST_PASSWORD = os.environ.get("CLA_TEST_PASSWORD", "")
 CORP_ACCOUNT = os.environ.get("CLA_CORP_ACCOUNT", "")
 CORP_PASSWORD = os.environ.get("CLA_CORP_PASSWORD", "")
+CORP_NEW_PWD = os.environ.get("CORP_NEW_PWD", "")
 VERIFY_CODE = os.environ.get("VERIFY_CODE", "")
 
 
@@ -89,8 +90,15 @@ def _do_login(page: Page, account: str, password: str):
                 raise
             page.wait_for_timeout(2000)
     page.locator('input[placeholder="账号"]').fill(account)
-    page.locator('input[placeholder="密码"]').fill(password)
+    page.wait_for_timeout(300)
+    # 使用 focus + keyboard 输入密码（确保 Vue 表单正确绑定）
+    pwd_input = page.locator('input[placeholder="密码"]')
+    pwd_input.focus()
+    page.wait_for_timeout(200)
+    page.keyboard.type(password, delay=50)
+    page.wait_for_timeout(500)
     page.locator('.el-checkbox').click()
+    page.wait_for_timeout(300)
     page.locator('.loginButton').click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(2000)
