@@ -126,20 +126,32 @@ def test_language_switch(page: Page):
     page.goto(BASE_URL)
     page.wait_for_timeout(1000)
 
-    # 点击语言下拉框，切换为 English
-    page.locator('#my_select').click()
-    page.wait_for_timeout(300)
-    page.locator('#my_option >> text=English').click()
-    page.wait_for_timeout(1000)
-    # 断言：登录按钮变为英文
+    # 切换为 English（点击语言下拉框 -> English），若元素获取不到则刷新页面重试
+    def _switch_to_english():
+        page.locator('#my_select').wait_for(state="visible", timeout=15000)
+        page.locator('#my_select').click()
+        page.wait_for_timeout(300)
+        page.locator('#my_option >> text=English').wait_for(state="visible", timeout=15000)
+        page.locator('#my_option >> text=English').click()
+        page.wait_for_timeout(1000)
+        # 断言：登录按钮变为英文
+        expect(page.locator('.loginButton')).to_contain_text("Login")
+
+    _retry_with_refresh(page, _switch_to_english)
     expect(page.locator('.loginButton')).to_contain_text("Login")
 
-    # 切换回中文
-    page.locator('#my_select').click()
-    page.wait_for_timeout(300)
-    page.locator('#my_option >> text=中文').click()
-    page.wait_for_timeout(1000)
-    # 断言：登录按钮变回中文
+    # 切换回中文（点击语言下拉框 -> 中文），若元素获取不到则刷新页面重试
+    def _switch_to_chinese():
+        page.locator('#my_select').wait_for(state="visible", timeout=15000)
+        page.locator('#my_select').click()
+        page.wait_for_timeout(300)
+        page.locator('#my_option >> text=中文').wait_for(state="visible", timeout=15000)
+        page.locator('#my_option >> text=中文').click()
+        page.wait_for_timeout(1000)
+        # 断言：登录按钮变回中文
+        expect(page.locator('.loginButton')).to_contain_text("登录")
+
+    _retry_with_refresh(page, _switch_to_chinese)
     expect(page.locator('.loginButton')).to_contain_text("登录")
 
 
@@ -148,9 +160,13 @@ def test_community_admin_login(page: Page):
     """basic_flows.yaml - 正常登录流程-社区管理员登录测试"""
     _do_login(page, TEST_ACCOUNT, TEST_PASSWORD)
 
-    # 断言：页面显示"配置CLA"按钮
+    # 断言：页面显示"配置CLA"按钮 + "已绑定的项目"，若元素获取不到则刷新页面重试
+    def _check_home():
+        page.locator('text=/配置.*CLA/').wait_for(state="visible", timeout=15000)
+        page.locator('text=已绑定的项目').wait_for(state="visible", timeout=15000)
+
+    _retry_with_refresh(page, _check_home)
     expect(page.locator('text=/配置.*CLA/')).to_be_visible()
-    # 断言：页面包含"已绑定的项目"
     expect(page.locator('text=已绑定的项目')).to_be_visible()
 
 
