@@ -42,11 +42,10 @@ if _env_file.exists():
             if key not in os.environ:
                 os.environ[key] = val
 
-TEST_ACCOUNT = os.environ.get("TEST_ACCOUNT", "")
-TEST_PASSWORD = os.environ.get("TEST_PASSWORD", "")
-CORP_ACCOUNT = os.environ.get("CORP_ACCOUNT", "")
-CORP_PASSWORD = os.environ.get("CORP_PASSWORD", "")
-CORP_NEW_PWD = os.environ.get("CORP_NEW_PWD", "")
+TEST_ACCOUNT = os.environ.get("CLA_TEST_ACCOUNT", "")
+TEST_PASSWORD = os.environ.get("CLA_TEST_PASSWORD", "")
+CORP_ACCOUNT = os.environ.get("CLA_CORP_ACCOUNT", "")
+CORP_PASSWORD = os.environ.get("CLA_CORP_PASSWORD", "")
 VERIFY_CODE = os.environ.get("VERIFY_CODE", "")
 
 
