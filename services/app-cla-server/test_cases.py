@@ -30,8 +30,8 @@ from pathlib import Path
 
 BASE_URL = "https://clasign.test.osinfra.cn/index"
 
-# 从 CLA/.env 加载环境变量
-_env_file = Path(__file__).parent.parent / ".env"
+# 从 .env 加载环境变量
+_env_file = Path(__file__).parent / ".env"
 if _env_file.exists():
     for line in _env_file.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -61,6 +61,24 @@ def _close_cookie_notice(page: Page):
         pass
 
 
+def _retry_with_refresh(page: Page, action, attempts: int = 3, wait_ms: int = 2000):
+    """执行 action（一次元素操作），若元素获取不到（抛异常）则刷新页面后重试。
+
+    :param action: 无参回调，内部封装一次元素 wait/click/断言操作
+    :param attempts: 最大尝试次数（含首次），默认 3
+    :param wait_ms: 刷新后的等待毫秒数，给页面渲染留时间
+    """
+    for attempt in range(attempts):
+        try:
+            action()
+            return
+        except Exception:
+            if attempt == attempts - 1:
+                raise
+            page.reload(wait_until="networkidle")
+            page.wait_for_timeout(wait_ms)
+
+
 def _click_dropdown_sign(page: Page):
     """通过 URL 直接导航到签署页面（绕过 element-plus dropdown 限制）
 
@@ -76,7 +94,7 @@ def _click_dropdown_sign(page: Page):
 
 
 def _do_login(page: Page, account: str, password: str):
-    """执行登录操作（账号+密码+复选框+登录按钮），含重试"""
+    """执行登录操作（账号+密码+复选框+登录按钮），含重试，若登录页面超时则刷新页面"""
     for attempt in range(3):
         try:
             page.goto(BASE_URL, timeout=30000)
@@ -88,6 +106,11 @@ def _do_login(page: Page, account: str, password: str):
         except Exception:
             if attempt == 2:
                 raise
+            # 若登录页面超时或加载异常，刷新页面后重试
+            try:
+                page.reload(wait_until="domcontentloaded", timeout=30000)
+            except Exception:
+                pass  # 刷新失败，继续等待后由下一次循环重试
             page.wait_for_timeout(2000)
     page.locator('input[placeholder="账号"]').fill(account)
     page.wait_for_timeout(300)
@@ -150,30 +173,50 @@ def test_view_cla_details(login_community_admin):
     """basic_flows.yaml - 正常登录流程-验证登录后功能"""
     page = login_community_admin
 
-    # 点击表格中最后一个项目地址（span.pointer.hoverUnderline）
-    page.locator('.el-table__body span.hoverUnderline').last.wait_for(state="visible", timeout=15000)
-    page.locator('.el-table__body span.hoverUnderline').last.click()
-    page.wait_for_timeout(2000)
+    # 点击表格中最后一个项目地址（span.pointer.hoverUnderline），若获取不到则刷新页面重试
+    def _open_detail():
+        page.locator('.el-table__body span.hoverUnderline').last.wait_for(state="visible", timeout=15000)
+        page.locator('.el-table__body span.hoverUnderline').last.click()
+        page.wait_for_timeout(2000)
+        # 进入详情后确认 tab 已渲染，否则视为获取不到、触发刷新重试
+        page.locator('[role="tab"]:has-text("已签署")').wait_for(state="visible", timeout=15000)
+
+    _retry_with_refresh(page, _open_detail)
 
     # 断言：页面显示已签署的企业列表（tab 标题）
     expect(page.locator('[role="tab"]:has-text("已签署")')).to_be_visible()
 
-    # 点击已完成
-    page.locator('text=已完成').click()
-    page.wait_for_timeout(1000)
-    # 断言：显示企业签署信息（至少1行）
+    # 点击已完成（若获取不到则刷新重试）
+    def _click_completed():
+        page.locator('text=已完成').wait_for(state="visible", timeout=15000)
+        page.locator('text=已完成').click()
+        page.wait_for_timeout(1000)
+        # 断言：显示企业签署信息（至少1行）
+        page.locator('.el-table__body tbody tr').first.wait_for(state="visible", timeout=15000)
+
+    _retry_with_refresh(page, _click_completed)
     expect(page.locator('.el-table__body tbody tr').first).to_be_visible()
 
-    # 点击个人CLA tab
-    page.locator('[role="tab"]:has-text("个人CLA"), [role="tab"]:has-text("个人 CLA")').click()
-    page.wait_for_timeout(1500)
-    # 断言：tab 面板内有内容
+    # 点击个人CLA tab（若获取不到则刷新重试）
+    def _click_individual_tab():
+        tab = page.locator('[role="tab"]:has-text("个人CLA"), [role="tab"]:has-text("个人 CLA")')
+        tab.wait_for(state="visible", timeout=15000)
+        tab.click()
+        page.wait_for_timeout(1500)
+        page.locator('[role="tabpanel"]:visible').wait_for(state="visible", timeout=15000)
+
+    _retry_with_refresh(page, _click_individual_tab)
     expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
 
-    # 点击企业CLA tab
-    page.locator('[role="tab"]:has-text("企业CLA"), [role="tab"]:has-text("企业 CLA")').click()
-    page.wait_for_timeout(1500)
-    # 断言：tab 面板内有内容
+    # 点击企业CLA tab（若获取不到则刷新重试）
+    def _click_corp_tab():
+        tab = page.locator('[role="tab"]:has-text("企业CLA"), [role="tab"]:has-text("企业 CLA")')
+        tab.wait_for(state="visible", timeout=15000)
+        tab.click()
+        page.wait_for_timeout(1500)
+        page.locator('[role="tabpanel"]:visible').wait_for(state="visible", timeout=15000)
+
+    _retry_with_refresh(page, _click_corp_tab)
     expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
 
 
