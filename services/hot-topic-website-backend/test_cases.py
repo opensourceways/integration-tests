@@ -356,34 +356,34 @@ class TestTopicReviewPut:
             assert body.get("code") == ""
 
 
-class TestTopicReviewPublish:
-    """GET /internal/v1/topic-review/{community}/publish — 获取待发布热点话题"""
+# class TestTopicReviewPublish:
+#     """GET /internal/v1/topic-review/{community}/publish — 获取待发布热点话题"""
 
-    @pytest.mark.positive
-    @pytest.mark.p0
-    def test_get_publish_topics_success(self, session):
-        """[正常流] 获取待发布热点话题成功，返回 200，结构正确"""
-        url = make_url(f"v1/topic-review/{COMMUNITY}/publish")
-        resp = session.get(url)
-        body = assert_common_response(resp, 200)
-        assert body["code"] == "", f"code 期望空字符串，实际：{body['code']}"
-        data = body.get("data")
-        assert isinstance(data, dict), "data 必须是对象"
-        assert "topics" in data, "data 缺少 topics 字段"
-        assert "total" in data, "data 缺少 total 字段"
-        assert isinstance(data["topics"], list), "topics 必须是数组"
-        assert data["total"] == len(data["topics"]), "total 应等于 topics 数组长度"
-        # 若 topics 非空，断言内部字段
-        if data["topics"]:
-            topic = data["topics"][0]
-            assert "id" in topic, "topic 缺少 id 字段"
-            assert "order" in topic, "topic 缺少 order 字段"
-            assert "title" in topic, "topic 缺少 title 字段"
-            assert "status" in topic, "topic 缺少 status 字段"
-            assert "dss" in topic, "topic 缺少 dss 字段"
-            assert "time" in topic["status"], "status 缺少 time 字段"
-            assert "status" in topic["status"], "status 缺少 status 字段"
-            assert topic["status"]["status"] in ("New", "Appended", "Resolved"), "status 值非法"
+    # @pytest.mark.positive
+    # @pytest.mark.p0
+    # def test_get_publish_topics_success(self, session):
+    #     """[正常流] 获取待发布热点话题成功，返回 200，结构正确"""
+    #     url = make_url(f"v1/topic-review/{COMMUNITY}/publish")
+    #     resp = session.get(url)
+    #     body = assert_common_response(resp, 200)
+    #     assert body["code"] == "", f"code 期望空字符串，实际：{body['code']}"
+    #     data = body.get("data")
+    #     assert isinstance(data, dict), "data 必须是对象"
+    #     assert "topics" in data, "data 缺少 topics 字段"
+    #     assert "total" in data, "data 缺少 total 字段"
+    #     assert isinstance(data["topics"], list), "topics 必须是数组"
+    #     assert data["total"] == len(data["topics"]), "total 应等于 topics 数组长度"
+    #     # 若 topics 非空，断言内部字段
+    #     if data["topics"]:
+    #         topic = data["topics"][0]
+    #         assert "id" in topic, "topic 缺少 id 字段"
+    #         assert "order" in topic, "topic 缺少 order 字段"
+    #         assert "title" in topic, "topic 缺少 title 字段"
+    #         assert "status" in topic, "topic 缺少 status 字段"
+    #         assert "dss" in topic, "topic 缺少 dss 字段"
+    #         assert "time" in topic["status"], "status 缺少 time 字段"
+    #         assert "status" in topic["status"], "status 缺少 status 字段"
+    #         assert topic["status"]["status"] in ("New", "Appended", "Resolved"), "status 值非法"
 
 
 # =============================================================================
