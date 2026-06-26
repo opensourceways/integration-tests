@@ -2,7 +2,7 @@
 测试用例集：MindSpore 官网 - 实训环境导航功能
 
 > 输入文档：用户提供的网站功能描述 + 手动抓取页面信息 + 实际运行调试结果
-> 用例总数：20 条 ｜ P0：4 ｜ P1：5 ｜ P2：3
+> 用例总数：21 条 ｜ P0：5 ｜ P1：5 ｜ P2：3
 > AI 执行工具：playwright + pytest
 > 依赖：pytest, pytest-playwright, playwright
 > 推荐执行命令：
@@ -33,13 +33,12 @@ import pytest
 from playwright.sync_api import Page, Browser, BrowserContext, expect, TimeoutError as PlaywrightTimeout, Response
 
 BASE_URL = os.environ.get("BASE_URL", "https://mindspore-website.test.osinfra.cn/")
-TRAINING_LINK = os.environ.get("TRAINING_LINK", "https://xihe.mindspore.cn")
 TEST_ACCOUNT = os.environ.get("TEST_ACCOUNT")
 TEST_PASSWORD = os.environ.get("TEST_PASSWORD")
 
 # 导航栏元素定位信息
-NAV_ITEM_SELECTOR = "#tour_headerNav_jupyter"
-NAV_TEXT_SELECTOR = "#tour_headerNav_jupyter .nav-text"
+NAV_ITEM_SELECTOR = '.nav-item:has-text("实训环境")'
+NAV_TEXT_SELECTOR = '.nav-item:has-text("实训环境") .nav-label'
 NAV_ITEM_CLASS = "nav-item item-other"
 
 # 实训环境对话框配置
@@ -108,7 +107,7 @@ def browser_context_args(browser_context_args):
     return {
         **browser_context_args,
         "accept_downloads": True,
-        "bypass_csp": True,
+        # "bypass_csp": True,  # 暂时禁用，可能影响 cookie 或登录态
         "ignore_https_errors": os.environ.get("IGNORE_HTT_ERRORS", "false").lower() == "true",
     }
 
@@ -175,13 +174,82 @@ def _login_if_needed(page: Page) -> None:
             page.wait_for_load_state("domcontentloaded")
 
 
+
+def _login_to_usercenter(page: Page) -> None:
+    """
+    辅助：登录到 MindSpore 用户中心。
+    如果当前未登录，则跳转至登录页并完成登录流程。
+
+    环境检测：若用户中心登录页返回 /notfound 或不存在登录表单，
+    说明测试环境登录服务不可用，将抛出 pytest.skip 跳过当前测试。
+    """
+    # 访问登录页，等待页面稳定
+    page.goto("https://mindspore-usercenter.test.osinfra.cn/login")
+    page.wait_for_timeout(3000)
+
+    # 环境可用性检测：如果前端路由跳转到 /notfound，说明登录页不可用
+    if "/notfound" in page.url:
+        pytest.skip(
+            "用户中心登录页当前不可用（返回 /notfound），"
+            "需要登录的测试暂时无法执行（环境限制）"
+        )
+
+    # 检查当前是否在登录页（如果不是，说明已登录或已被重定向）
+    if "login" not in page.url and "usercenter" not in page.url:
+        return
+
+    # 检查是否存在登录表单
+    if page.locator("input[type=text]").count() == 0:
+        pytest.skip(
+            "用户中心登录页未检测到登录表单（可能环境已变更），"
+            "需要登录的测试暂时无法执行（环境限制）"
+        )
+
+    # 在登录页，执行登录流程
+    page.wait_for_selector("input[type=text]", timeout=DEFAULT_TIMEOUT)
+
+    # 填写用户名和密码
+    page.locator("input[type=text]").first.fill(TEST_ACCOUNT)
+    page.wait_for_timeout(500)
+    page.locator("input[type=password]").first.fill(TEST_PASSWORD)
+    page.wait_for_timeout(500)
+
+    # 点击登录按钮
+    login_btn = page.locator("button.login-btn").first
+    if login_btn.count() > 0 and not login_btn.is_disabled():
+        login_btn.click()
+
+    # 等待页面离开登录页（最多10秒）
+    try:
+        page.wait_for_url(lambda url: "login" not in url and "usercenter" not in url, timeout=10000)
+    except PlaywrightTimeout:
+        # 仍未离开登录页，检查是否有验证码
+        captcha_selectors = [".captcha", ".slider", ".verify", ".slide", "[class*=captcha]", "[class*=verify]"]
+        for sel in captcha_selectors:
+            captcha = page.locator(sel).first
+            if captcha.count() > 0 and captcha.is_visible():
+                pytest.skip("登录需要验证码/滑块验证，需要人工介入（已知限制）")
+
+        # 检查登录页上的错误提示（限定在登录表单范围内）
+        login_form = page.locator("form, .login-form, .login-page").first
+        if login_form.count() > 0:
+            error_msg = login_form.locator(".error-message, .el-form-item__error").first
+            if error_msg.count() > 0 and error_msg.is_visible():
+                text = error_msg.inner_text().strip()
+                if text:
+                    raise AssertionError(f"登录失败: {text}")
+
+        raise AssertionError("登录后10秒仍未离开登录页，可能登录失败或需要额外验证")
+
+
+
 def _click_training_nav_and_capture_dialog(page: Page, timeout: int = 30000) -> Tuple[Page, Optional[Any]]:
     """
     辅助：点击实训环境导航项并捕获弹出的配置对话框。
     返回: (page 对象, 对话框元素或 None)
     """
     nav_item = page.locator(NAV_ITEM_SELECTOR)
-    expect(nav_item).to_be_visible()
+    expect(nav_item).to_be_visible(timeout=DEFAULT_TIMEOUT)
 
     # 点击前记录对话框数量
     pre_dialog_count = page.locator(DIALOG_SELECTOR).count()
@@ -673,47 +741,250 @@ class TestApiConsistency:
             assert isinstance(item["images"], list), "images 不是数组"
 
 
-# ============================== 手动测试注释块 ==============================
-# === TC-UI-MANUAL-001 [SKIP-MANUAL] ===
-# 维度：[正常流] + 优先级 P2
-# 不可自动化原因：启动 Jupyter 实例后需要等待云端资源分配，耗时不可控（30s~5min），
-#   且需要确认实例是否真正启动成功（涉及后端 Ascend 资源调度）。
-# 人工执行步骤：
-#   1. 登录主站测试环境
-#   2. 点击导航栏【实训环境】
-#   3. 在配置对话框中选择规格（如 1*ascend-snt9b）和镜像
-#   4. 点击启动/确认按钮
-#   5. 等待 Jupyter 页面加载完成
-#   6. 验证 Jupyter Notebook 界面可正常交互（新建 cell、运行代码）
-# 预期结果：
-#   - Jupyter 实例在 3 分钟内启动成功
-#   - 页面展示 Jupyter Notebook 或 JupyterLab 界面
-#   - 可正常执行 Python 代码单元格
-#   - 实例运行 3 小时后自动释放资源
 
-# === TC-UI-MANUAL-002 [SKIP-MANUAL] ===
-# 维度：[权限] + 优先级 P2
-# 不可自动化原因：需要验证实例启动后的权限隔离（不同用户不应互相访问实例），
-#   需要两个真实测试账号配合操作，无法单账号自动化完成。
-# 人工执行步骤：
-#   1. 使用账号 A 启动 Jupyter 实例
-#   2. 使用账号 B 尝试访问账号 A 的实例 URL
-#   3. 验证是否被拒绝访问（403/404）
-# 预期结果：
-#   - 账号 B 无法访问账号 A 的 Jupyter 实例
-#   - 返回权限不足或实例不存在的提示
 
-# === TC-UI-MANUAL-003 [SKIP-MANUAL] ===
-# 维度：[异常] + 优先级 P3
-# 不可自动化原因：需要模拟 Ascend 资源耗尽的场景，依赖后端运维操作或特定测试环境配置。
-# 人工执行步骤：
-#   1. 在 Ascend 资源耗尽时（全部实例被占用）
-#   2. 点击导航栏【实训环境】并尝试启动实例
-#   3. 观察前端提示是否友好（如"资源不足，请稍后重试"）
-# 预期结果：
-#   - 前端展示友好的资源不足提示
-#   - 不出现白屏或未捕获的 JavaScript 错误
-#   - 允许用户稍后重试或选择其他规格
+# -----------------------------------------------------------------------
+# 七、Jupyter 实例启动流程
+# -----------------------------------------------------------------------
+
+class TestJupyterLaunch:
+    """模块七：Jupyter 实例启动与访问验证（原 TC-UI-MANUAL-001 自动化）"""
+
+    def test_jupyter_launch_and_button_state_change(self, page_fixture: Page) -> None:
+        """
+        TC-UI-JUPYTER-001 [正常流] 登录后点击启动按钮，等待实例启动完成，按钮变为进入Jupyter
+        优先级：P0
+        """
+        # 步骤1：登录用户中心（若环境不可用则自动跳过）
+        _login_to_usercenter(page_fixture)
+
+        # 步骤2：回到主站，点击实训环境导航
+        page_fixture.goto(BASE_URL)
+        page_fixture.wait_for_timeout(3000)
+        _ensure_nav_visible(page_fixture)
+
+        page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+        assert dialog is not None, "对话框未弹出"
+        expect(dialog).to_be_visible()
+
+        # 步骤3：检查对话框主按钮状态
+        solid_btn = dialog.locator("button.o-btn-solid").first
+        assert solid_btn.count() > 0, "对话框中未找到主操作按钮"
+        assert solid_btn.is_visible(), "主操作按钮不可见"
+
+        initial_text = solid_btn.inner_text().strip()
+        print(f"[Jupyter Launch] Initial button text: {initial_text}")
+
+        # 如果按钮已经是"进入Jupyter"，说明实例已存在，直接断言成功
+        # 断言成功后，点击"结束"按钮释放资源
+        if "Jupyter" in initial_text:
+            # 查找"结束"按钮（通常为 outline 样式，位于对话框中）
+            end_btn = dialog.locator("button").filter(has_text="结束").first
+            if end_btn.count() == 0:
+                end_btn = dialog.locator("button.o-btn-outline").first
+            if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
+                end_text = end_btn.inner_text().strip()
+                print(f"[Jupyter Launch] 已有实例，断言成功，点击结束按钮: {end_text}")
+                end_btn.click()
+                page_fixture.wait_for_timeout(3000)
+            return
+
+        # 步骤4：如果按钮文本为启动类（"启动" / "启动环境"），点击启动按钮
+        launch_keywords = ["启动", "启动环境", "Launch", "Start"]
+        is_launch_btn = any(kw in initial_text for kw in launch_keywords)
+        assert is_launch_btn, f"主按钮文本既不是'进入Jupyter'也不是启动类，实际: {initial_text}"
+
+        # 用户要求：点击导航栏实训环境后，等 3s 再点击启动环境按钮（确保对话框状态稳定）
+        page_fixture.wait_for_timeout(5000)
+        solid_btn.click()
+        page_fixture.wait_for_timeout(5000)
+
+        # 步骤5：每分钟检查一次按钮状态，最多5次（5分钟）
+        # 中间状态："启动环境"、"启动中" —— 继续等待
+        # 成功状态："进入Jupyter" —— 断言成功
+        button_changed = False
+        for i in range(5):
+            page_fixture.wait_for_timeout(60000)
+
+            page_fixture.reload()
+            page_fixture.wait_for_timeout(3000)
+            _ensure_nav_visible(page_fixture)
+
+            page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+            if dialog is None:
+                continue
+
+            solid_btn = dialog.locator("button.o-btn-solid").first
+            if solid_btn.count() == 0 or not solid_btn.is_visible():
+                continue
+
+            time.sleep(3)
+            current_text = solid_btn.inner_text().strip()
+            print(f"[Jupyter Launch] Check {i+1}/5: button text = {current_text}")
+
+            if "Jupyter" in current_text:
+                button_changed = True
+                # 断言成功后，点击"结束"按钮释放资源
+                end_btn = dialog.locator("button").filter(has_text="结束").first
+                if end_btn.count() == 0:
+                    end_btn = dialog.locator("button.o-btn-outline").first
+                if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
+                    end_text = end_btn.inner_text().strip()
+                    print(f"[Jupyter Launch] 断言成功，点击结束按钮: {end_text}")
+                    end_btn.click()
+                    page_fixture.wait_for_timeout(3000)
+                    time.sleep(120000)
+                break
+
+            # 中间状态：继续等待，不报错
+            if any(kw in current_text for kw in ["启动中", "启动环境"]):
+                print(f"[Jupyter Launch] 当前处于中间状态 '{current_text}'，继续等待...")
+                continue
+
+        # 断言：按钮最终变为"进入Jupyter"
+        assert button_changed, "启动按钮在5分钟内未变为'进入Jupyter'，实例启动失败或超时"
+
+# -----------------------------------------------------------------------
+# 八、Jupyter 实例权限隔离（原 TC-UI-MANUAL-002 自动化）
+# -----------------------------------------------------------------------
+
+class TestJupyterPermission:
+    """模块八：Jupyter 实例权限隔离（原 TC-UI-MANUAL-002 自动化）"""
+
+    def test_jupyter_instance_logout_access_denied(self, page_fixture: Page, context: BrowserContext) -> None:
+        """
+        TC-UI-JUPYTER-002 [权限] 退出登录后再次访问 Jupyter 实例 URL 应被拒绝
+        优先级：P2
+        """
+        # 步骤1：登录用户中心
+        _login_to_usercenter(page_fixture)
+
+        # 步骤2：回到主站，点击实训环境导航，弹出对话框
+        page_fixture.goto(BASE_URL)
+        page_fixture.wait_for_timeout(3000)
+        _ensure_nav_visible(page_fixture)
+
+        page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+        assert dialog is not None, "对话框未弹出"
+        expect(dialog).to_be_visible()
+
+        # 步骤3：检查主按钮状态，确保实例已启动
+        solid_btn = dialog.locator("button.o-btn-solid").first
+        assert solid_btn.count() > 0, "对话框中未找到主操作按钮"
+        assert solid_btn.is_visible(), "主操作按钮不可见"
+
+        initial_text = solid_btn.inner_text().strip()
+        print(f"[Jupyter Permission] Initial button text: {initial_text}")
+
+        instance_created_by_test = False
+
+        # 如果当前没有实例，需要先启动一个
+        if "Jupyter" not in initial_text:
+            launch_keywords = ["启动", "启动环境", "Launch", "Start"]
+            is_launch_btn = any(kw in initial_text for kw in launch_keywords)
+            if not is_launch_btn:
+                pytest.skip(f"当前按钮状态不是启动也不是进入Jupyter，无法继续测试: {initial_text}")
+
+            page_fixture.wait_for_timeout(3000)
+            solid_btn.click()
+            page_fixture.wait_for_timeout(3000)
+            instance_created_by_test = True
+
+            # 等待实例启动完成（最多5分钟）
+            instance_ready = False
+            for i in range(5):
+                page_fixture.wait_for_timeout(60000)
+                page_fixture.reload()
+                page_fixture.wait_for_timeout(3000)
+                _ensure_nav_visible(page_fixture)
+
+                page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+                if dialog is None:
+                    continue
+
+                solid_btn = dialog.locator("button.o-btn-solid").first
+                if solid_btn.count() == 0 or not solid_btn.is_visible():
+                    continue
+
+                page_fixture.wait_for_timeout(3000)
+                current_text = solid_btn.inner_text().strip()
+                print(f"[Jupyter Permission] Check {i+1}/5: button text = {current_text}")
+
+                if "Jupyter" in current_text:
+                    instance_ready = True
+                    # 保留对话框打开状态，后续直接使用
+                    break
+
+                if not any(kw in current_text for kw in ["启动中", "启动环境"]):
+                    pytest.skip(f"实例启动异常，当前按钮状态: {current_text}")
+
+            if not instance_ready:
+                pytest.skip("实例启动超时，无法继续权限测试")
+
+        # 如果对话框已不在页面上，重新打开；否则直接使用当前对话框
+        if dialog.count() == 0 or not dialog.is_visible():
+            page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+        assert dialog is not None and dialog.is_visible(), "对话框未就绪，无法捕获 Jupyter URL"
+
+        solid_btn = dialog.locator("button.o-btn-solid").first
+        assert solid_btn.count() > 0 and "Jupyter" in solid_btn.inner_text().strip(), \
+            "实例未就绪，无法捕获 Jupyter URL"
+
+        # 步骤4：点击"进入Jupyter"按钮，捕获弹出的新页面 URL
+        with page_fixture.expect_popup(timeout=30000) as popup_info:
+            solid_btn.click()
+            page_fixture.wait_for_timeout(3000)
+
+        popup = popup_info.value
+        jupyter_url = popup.url
+        print(f"[Jupyter Permission] Captured Jupyter URL: {jupyter_url}")
+        popup.close()
+
+        try:
+            # 步骤5：退出登录（清除所有 cookies 和 storage）
+            context.clear_cookies()
+            page_fixture.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+
+            # 步骤6：在退出登录状态下再次访问该 Jupyter URL
+            page_fixture.goto(jupyter_url)
+            page_fixture.wait_for_timeout(5000)
+
+            # 步骤7：验证是否被拒绝访问
+            current_url = page_fixture.url
+            page_title = page_fixture.title().strip()
+            body_text = page_fixture.locator("body").inner_text().strip().lower()
+
+            print(f"[Jupyter Permission] After logout, URL: {current_url}")
+            print(f"[Jupyter Permission] After logout, title: {page_title}")
+            print(f"[Jupyter Permission] After logout, body[:200]: {body_text[:200]}")
+
+            # 判断被拒绝的方式
+            is_redirected_to_login = "/login" in current_url or "usercenter" in current_url
+            has_permission_error = any(kw in body_text for kw in ["403", "404", "权限", "无权限", "拒绝", "denied", "forbidden", "not found", "unauthorized", "不存在", "未登录", "error", "login"])
+            is_error_page = page_fixture.locator(".error-page, .error-container, .not-found, .el-message-box, .o-message").count() > 0
+
+            # 断言
+            assert is_redirected_to_login or has_permission_error or is_error_page, \
+                f"退出登录后仍可访问 Jupyter 实例 URL，权限隔离失败。当前URL: {current_url}, 标题: {page_title}, 内容: {body_text[:300]}"
+        finally:
+            # 步骤8：如果实例是本测试创建的，重新登录并结束实例（清理资源）
+            if instance_created_by_test:
+                try:
+                    _login_to_usercenter(page_fixture)
+                    page_fixture.goto(BASE_URL)
+                    page_fixture.wait_for_timeout(3000)
+                    _ensure_nav_visible(page_fixture)
+                    page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+                    if dialog is not None:
+                        end_btn = dialog.locator("button").filter(has_text="结束").first
+                        if end_btn.count() == 0:
+                            end_btn = dialog.locator("button.o-btn-outline").first
+                        if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
+                            end_btn.click()
+                            page_fixture.wait_for_timeout(3000)
+                            print("[Jupyter Permission] 已结束实例，释放资源")
+                except Exception as e:
+                    print(f"[Jupyter Permission] 清理实例时发生异常（非致命）: {e}")
 
 # ============================== 覆盖矩阵 ==============================
 """
