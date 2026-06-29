@@ -833,7 +833,7 @@ class TestJupyterLaunch:
                     print(f"[Jupyter Launch] 断言成功，点击结束按钮: {end_text}")
                     end_btn.click()
                     page_fixture.wait_for_timeout(3000)
-                    time.sleep(120000)
+                    time.sleep(300000)
                 break
 
             # 中间状态：继续等待，不报错
