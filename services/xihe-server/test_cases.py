@@ -799,12 +799,12 @@ class TestJupyterLaunch:
         solid_btn.click()
         page_fixture.wait_for_timeout(5000)
 
-        # 步骤5：每分钟检查一次按钮状态，最多5次（5分钟）
+        # 步骤5：每20秒检查一次按钮状态，最多3次（60秒）
         # 中间状态："启动环境"、"启动中" —— 继续等待
         # 成功状态："进入Jupyter" —— 断言成功
         button_changed = False
-        for i in range(5):
-            page_fixture.wait_for_timeout(60000)
+        for i in range(3):
+            page_fixture.wait_for_timeout(20000)
 
             page_fixture.reload()
             page_fixture.wait_for_timeout(3000)
@@ -820,7 +820,7 @@ class TestJupyterLaunch:
 
             time.sleep(3)
             current_text = solid_btn.inner_text().strip()
-            print(f"[Jupyter Launch] Check {i+1}/5: button text = {current_text}")
+            print(f"[Jupyter Launch] Check {i+1}/3: button text = {current_text}")
 
             if "Jupyter" in current_text:
                 button_changed = True
@@ -833,7 +833,6 @@ class TestJupyterLaunch:
                     print(f"[Jupyter Launch] 断言成功，点击结束按钮: {end_text}")
                     end_btn.click()
                     page_fixture.wait_for_timeout(3000)
-                    time.sleep(300000)
                 break
 
             # 中间状态：继续等待，不报错
@@ -890,10 +889,10 @@ class TestJupyterPermission:
             page_fixture.wait_for_timeout(3000)
             instance_created_by_test = True
 
-            # 等待实例启动完成（最多5分钟）
+            # 等待实例启动完成（最多60秒）
             instance_ready = False
-            for i in range(5):
-                page_fixture.wait_for_timeout(60000)
+            for i in range(3):
+                page_fixture.wait_for_timeout(20000)
                 page_fixture.reload()
                 page_fixture.wait_for_timeout(3000)
                 _ensure_nav_visible(page_fixture)
@@ -908,7 +907,7 @@ class TestJupyterPermission:
 
                 page_fixture.wait_for_timeout(3000)
                 current_text = solid_btn.inner_text().strip()
-                print(f"[Jupyter Permission] Check {i+1}/5: button text = {current_text}")
+                print(f"[Jupyter Permission] Check {i+1}/3: button text = {current_text}")
 
                 if "Jupyter" in current_text:
                     instance_ready = True
