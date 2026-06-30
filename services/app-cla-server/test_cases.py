@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-CLA 签署平台 UI 自动化测试脚本
-================================
+CLA 签署平台 UI 自动化测试脚本（增强健壮性版）
+============================================
 用例来源：basic_flows.yaml / corp_manager.yaml / individual_corp_sign.yaml / represent_sign.yaml
 用例总数：8 条
   - 稳定通过：3 条（test_language_switch, test_community_admin_login, test_view_cla_details）
@@ -18,14 +18,15 @@ CLA 签署平台 UI 自动化测试脚本
     pytest CLA/suites/test_cla_ui.py -v --headed
     pytest CLA/suites/test_cla_ui.py -k "language_switch or community_admin_login or view_cla_details" -v --headed
 已知限制：
-    - el-dropdown 操作列菜单点击后的 Vue @command 回调无法通过 Playwright 触发
+    - el-dropdown 操作列菜单点击后的 Vue @command 回调无法通过 Playwright 直接触发
     - 建议前端添加 data-testid 或改用 trigger="click"
     - 替代方案：使用 midscene AI 视觉自动化直接运行原始 YAML 用例
 """
 
 import os
+import time
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, expect, TimeoutError as PlaywrightTimeout
 from pathlib import Path
 
 BASE_URL = "https://clasign.test.osinfra.cn/index"
@@ -35,34 +36,143 @@ TEST_PASSWORD = os.environ.get("CLA_TEST_PASSWORD", "")
 CORP_ACCOUNT = os.environ.get("CLA_CORP_ACCOUNT", "")
 CORP_PASSWORD = os.environ.get("CLA_CORP_PASSWORD", "")
 
+# 截图保存目录
+SCREENSHOT_DIR = Path(__file__).parent / "screenshots"
+SCREENSHOT_DIR.mkdir(exist_ok=True)
+
+
+def _screenshot(page: Page, name: str):
+    """保存截图，用于失败排查"""
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    path = SCREENSHOT_DIR / f"{name}_{timestamp}.png"
+    try:
+        page.screenshot(path=str(path), full_page=True)
+        print(f"[Screenshot] saved: {path}")
+    except Exception as e:
+        print(f"[Screenshot] failed: {e}")
+
+
+def _wait_for_element(page: Page, selector: str, timeout: int = 15000, state: str = "visible"):
+    """健壮地等待元素到达指定状态，增加 attached 前置检查，避免偶现 detached 错误。"""
+    # 先等元素挂载到 DOM
+    locator = page.locator(selector)
+    try:
+        locator.first.wait_for(state="attached", timeout=timeout)
+    except PlaywrightTimeout:
+        # 元素可能从未出现，直接抛异常
+        raise
+    # 再等目标状态（visible / enabled）
+    if state != "attached":
+        locator.first.wait_for(state=state, timeout=timeout)
+    return locator
+
+
+def _safe_click(page: Page, selector: str, timeout: int = 15000, screenshot_name: str = None):
+    """健壮点击：等可见 -> 等可交互 -> 滚动到视口 -> 点击。
+
+    避免偶现失败场景：
+    - 元素还在动画中（遮罩未消失）
+    - 元素在视口外被遮挡
+    - 点击被 cookie banner 拦截
+    """
+    locator = _wait_for_element(page, selector, timeout, state="visible")
+    try:
+        # 确保元素没有被遮挡（element-plus 遮罩 / cookie banner）
+        locator.first.wait_for(state="visible", timeout=timeout)
+    except Exception:
+        if screenshot_name:
+            _screenshot(page, screenshot_name)
+        raise
+
+    # 滚动到视口并点击（force=False 让 Playwright 自动检查可点击性）
+    try:
+        locator.first.click(timeout=timeout)
+    except Exception:
+        # 如果点击被拦截（如 cookie banner），尝试用 JavaScript 点击兜底
+        page.evaluate(f"document.querySelector('{selector.replace(chr(39), chr(92)+chr(39))}')?.click()")
+    page.wait_for_timeout(300)
+    return locator
+
+
+def _safe_fill(page: Page, selector: str, value: str, timeout: int = 15000, screenshot_name: str = None):
+    """健壮填充：聚焦 -> 清空 -> 输入 -> 验证回填值。
+
+    避免偶现失败场景：
+    - Vue 表单未绑定（fill 没触发 input 事件）
+    - 元素被 cookie banner 遮挡导致聚焦失败
+    """
+    locator = _wait_for_element(page, selector, timeout, state="visible")
+    # 聚焦并清空
+    locator.first.focus()
+    page.wait_for_timeout(200)
+    page.keyboard.press("Control+a")
+    page.keyboard.press("Delete")
+    page.wait_for_timeout(200)
+    # 输入（使用 keyboard.type 逐字输入，确保触发 input 事件）
+    page.keyboard.type(value, delay=30)
+    page.wait_for_timeout(500)
+    # 验证回填值（若支持 input_value）
+    try:
+        actual = locator.first.input_value(timeout=3000)
+        if actual != value:
+            # 回填不一致，尝试再次填充
+            locator.first.fill(value)
+            page.wait_for_timeout(300)
+    except Exception:
+        pass
+    return locator
+
 
 def _close_cookie_notice(page: Page):
-    """关闭 cookie 提示条（如果存在）"""
+    """关闭 cookie 提示条（如果存在），避免遮挡后续操作。"""
     try:
         cookie_close = page.locator('.cookie-notice .close-icon')
         if cookie_close.count() > 0 and cookie_close.first.is_visible():
             cookie_close.first.click()
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(500)
+            # 等待 cookie banner 消失，避免残留遮挡
+            try:
+                cookie_close.first.wait_for(state="hidden", timeout=3000)
+            except Exception:
+                pass
     except Exception:
         pass
 
 
-def _retry_with_refresh(page: Page, action, attempts: int = 5, wait_ms: int = 2000):
+def _wait_for_spa_ready(page: Page, timeout: int = 20000):
+    """等待 SPA 页面渲染完成：networkidle + 检测 body 中是否有关键 Vue 挂载标记。"""
+    try:
+        page.wait_for_load_state("networkidle", timeout=timeout)
+    except PlaywrightTimeout:
+        pass  # 部分页面不会完全 networkidle，继续检查关键元素
+    page.wait_for_timeout(800)
+    # 检测 Vue 应用是否已挂载（通过检查 DOM 中是否存在 el-* 类或 id="app"）
+    try:
+        page.wait_for_selector("#app, .el-container, .el-main", state="attached", timeout=5000)
+    except Exception:
+        pass
+
+
+def _retry_action(page: Page, action, attempts: int = 5, wait_ms: int = 2000, screenshot_name: str = None):
     """执行 action（一次元素操作），若元素获取不到（抛异常）则刷新页面后重试。
 
-    :param action: 无参回调，内部封装一次元素 wait/click/断言操作
-    :param attempts: 最大尝试次数（含首次），默认 5
-    :param wait_ms: 刷新后的等待毫秒数，给页面渲染留时间
+    增强：每次失败自动截图，刷新后等待 SPA 渲染完成再重试。
     """
+    last_exception = None
     for attempt in range(attempts):
         try:
             action()
             return
-        except Exception:
+        except Exception as e:
+            last_exception = e
+            if screenshot_name:
+                _screenshot(page, f"{screenshot_name}_retry_{attempt}")
             if attempt == attempts - 1:
-                raise
+                break
             page.reload(wait_until="networkidle")
+            _wait_for_spa_ready(page)
             page.wait_for_timeout(wait_ms)
+    raise last_exception
 
 
 def _click_dropdown_sign(page: Page):
@@ -73,44 +183,62 @@ def _click_dropdown_sign(page: Page):
     2. 但表格中"项目地址"是 span.hoverUnderline，点击会通过 router.push 跳转到 /sign/:linkId
     3. 因此用点击项目地址替代点击 dropdown -> 签署，效果等价
     """
-    page.locator('.el-table__body span.hoverUnderline').last.wait_for(state="visible", timeout=15000)
+    _wait_for_element(page, '.el-table__body span.hoverUnderline', timeout=15000, state="visible")
+    # 先滚动到元素确保可见
+    page.locator('.el-table__body span.hoverUnderline').last.scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
     page.locator('.el-table__body span.hoverUnderline').last.click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(2000)
 
 
 def _do_login(page: Page, account: str, password: str):
-    """执行登录操作（账号+密码+复选框+登录按钮），含重试，若登录页面超时则刷新页面"""
+    """执行登录操作（账号+密码+复选框+登录按钮），含重试，若登录页面超时则刷新页面。"""
     for attempt in range(5):
         try:
             page.goto(BASE_URL, timeout=30000)
-            page.wait_for_load_state("domcontentloaded")
-            page.wait_for_timeout(1500)
+            _wait_for_spa_ready(page, timeout=20000)
             _close_cookie_notice(page)
-            page.locator('input[placeholder="账号"]').wait_for(state="visible", timeout=20000)
+            _wait_for_element(page, 'input[placeholder="账号"]', timeout=20000, state="visible")
             break
-        except Exception:
+        except Exception as e:
             if attempt == 4:
+                _screenshot(page, "login_final_fail")
                 raise
-            # 若登录页面超时或加载异常，刷新页面后重试
             try:
-                page.reload(wait_until="domcontentloaded", timeout=30000)
+                page.reload(wait_until="networkidle", timeout=30000)
+                _wait_for_spa_ready(page)
             except Exception:
-                pass  # 刷新失败，继续等待后由下一次循环重试
+                pass
             page.wait_for_timeout(2000)
-    page.locator('input[placeholder="账号"]').fill(account)
-    page.wait_for_timeout(300)
-    # 使用 focus + keyboard 输入密码（确保 Vue 表单正确绑定）
+    # 填充账号（健壮方式）
+    _safe_fill(page, 'input[placeholder="账号"]', account, timeout=15000, screenshot_name="login_fill_account")
+    # 填充密码（使用 focus + keyboard 输入，确保 Vue 表单正确绑定）
     pwd_input = page.locator('input[placeholder="密码"]')
     pwd_input.focus()
     page.wait_for_timeout(200)
     page.keyboard.type(password, delay=50)
     page.wait_for_timeout(500)
-    page.locator('.el-checkbox').click()
+    # 验证密码回填
+    try:
+        if pwd_input.input_value(timeout=2000) != password:
+            pwd_input.fill(password)
+            page.wait_for_timeout(300)
+    except Exception:
+        pass
+    # 勾选复选框（增加可见性检查）
+    checkbox = page.locator('.el-checkbox')
+    checkbox.wait_for(state="visible", timeout=10000)
+    checkbox.click()
     page.wait_for_timeout(300)
-    page.locator('.loginButton').click()
+    # 点击登录（增加可点击检查）
+    login_btn = page.locator('.loginButton')
+    login_btn.wait_for(state="visible", timeout=10000)
+    login_btn.click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(2000)
+    # 登录后 SPA 渲染检测
+    _wait_for_spa_ready(page)
 
 
 @pytest.fixture(scope="function")
@@ -120,38 +248,47 @@ def login_community_admin(page: Page):
     return page
 
 
+@pytest.fixture(autouse=True)
+def screenshot_on_failure(request, page: Page):
+    """每个测试用例失败时自动截图，保留现场用于排查偶现问题。"""
+    yield
+    if request.node.rep_call.failed:
+        _screenshot(page, f"FAIL_{request.node.name}")
+
+
 # === TC-UI-BASIC-001 中英切换测试 ===
 def test_language_switch(page: Page):
     """basic_flows.yaml - 中英切换测试"""
-    page.goto(BASE_URL)
-    page.wait_for_timeout(1000)
+    page.goto(BASE_URL, timeout=30000)
+    _wait_for_spa_ready(page)
+    _close_cookie_notice(page)
 
     # 切换为 English（点击语言下拉框 -> English），若元素获取不到则刷新页面重试
     def _switch_to_english():
-        page.locator('#my_select').wait_for(state="visible", timeout=15000)
-        page.locator('#my_select').click()
+        select = _wait_for_element(page, '#my_select', timeout=15000, state="visible")
+        select.first.click()
         page.wait_for_timeout(300)
-        page.locator('#my_option >> text=English').wait_for(state="visible", timeout=15000)
-        page.locator('#my_option >> text=English').click()
+        option = _wait_for_element(page, '#my_option >> text=English', timeout=15000, state="visible")
+        option.first.click()
         page.wait_for_timeout(1000)
         # 断言：登录按钮变为英文
         expect(page.locator('.loginButton')).to_contain_text("Login")
 
-    _retry_with_refresh(page, _switch_to_english)
+    _retry_action(page, _switch_to_english, screenshot_name="lang_switch_en")
     expect(page.locator('.loginButton')).to_contain_text("Login")
 
     # 切换回中文（点击语言下拉框 -> 中文），若元素获取不到则刷新页面重试
     def _switch_to_chinese():
-        page.locator('#my_select').wait_for(state="visible", timeout=15000)
-        page.locator('#my_select').click()
+        select = _wait_for_element(page, '#my_select', timeout=15000, state="visible")
+        select.first.click()
         page.wait_for_timeout(300)
-        page.locator('#my_option >> text=中文').wait_for(state="visible", timeout=15000)
-        page.locator('#my_option >> text=中文').click()
+        option = _wait_for_element(page, '#my_option >> text=中文', timeout=15000, state="visible")
+        option.first.click()
         page.wait_for_timeout(1000)
         # 断言：登录按钮变回中文
         expect(page.locator('.loginButton')).to_contain_text("登录")
 
-    _retry_with_refresh(page, _switch_to_chinese)
+    _retry_action(page, _switch_to_chinese, screenshot_name="lang_switch_cn")
     expect(page.locator('.loginButton')).to_contain_text("登录")
 
 
@@ -162,10 +299,10 @@ def test_community_admin_login(page: Page):
 
     # 断言：页面显示"配置CLA"按钮 + "已绑定的项目"，若元素获取不到则刷新页面重试
     def _check_home():
-        page.locator('text=/配置.*CLA/').wait_for(state="visible", timeout=15000)
-        page.locator('text=已绑定的项目').wait_for(state="visible", timeout=15000)
+        _wait_for_element(page, 'text=/配置.*CLA/', timeout=15000, state="visible")
+        _wait_for_element(page, 'text=已绑定的项目', timeout=15000, state="visible")
 
-    _retry_with_refresh(page, _check_home)
+    _retry_action(page, _check_home, screenshot_name="admin_login_home")
     expect(page.locator('text=/配置.*CLA/')).to_be_visible()
     expect(page.locator('text=已绑定的项目')).to_be_visible()
 
@@ -177,48 +314,54 @@ def test_view_cla_details(login_community_admin):
 
     # 点击表格中最后一个项目地址（span.pointer.hoverUnderline），若获取不到则刷新页面重试
     def _open_detail():
-        page.locator('.el-table__body span.hoverUnderline').last.wait_for(state="visible", timeout=15000)
-        page.locator('.el-table__body span.hoverUnderline').last.click()
+        cell = _wait_for_element(page, '.el-table__body span.hoverUnderline', timeout=15000, state="visible")
+        cell.last.scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+        cell.last.click()
         page.wait_for_timeout(2000)
         # 进入详情后确认 tab 已渲染，否则视为获取不到、触发刷新重试
-        page.locator('[role="tab"]:has-text("已签署")').wait_for(state="visible", timeout=15000)
+        _wait_for_element(page, '[role="tab"]:has-text("已签署")', timeout=15000, state="visible")
 
-    _retry_with_refresh(page, _open_detail)
+    _retry_action(page, _open_detail, screenshot_name="view_cla_detail")
 
     # 断言：页面显示已签署的企业列表（tab 标题）
     expect(page.locator('[role="tab"]:has-text("已签署")')).to_be_visible()
 
     # 点击已完成（若获取不到则刷新重试）
     def _click_completed():
-        page.locator('text=已完成').wait_for(state="visible", timeout=15000)
-        page.locator('text=已完成').click()
+        btn = _wait_for_element(page, 'text=已完成', timeout=15000, state="visible")
+        btn.first.click()
         page.wait_for_timeout(1000)
         # 断言：显示企业签署信息（至少1行）
-        page.locator('.el-table__body tbody tr').first.wait_for(state="visible", timeout=15000)
+        _wait_for_element(page, '.el-table__body tbody tr', timeout=15000, state="visible")
 
-    _retry_with_refresh(page, _click_completed)
+    _retry_action(page, _click_completed, screenshot_name="click_completed")
     expect(page.locator('.el-table__body tbody tr').first).to_be_visible()
 
-    # 点击个人CLA tab（若获取不到则刷新重试）
+    # 点击个人CLA tab（若获取不到则刷新页面重试）
     def _click_individual_tab():
         tab = page.locator('[role="tab"]:has-text("个人CLA"), [role="tab"]:has-text("个人 CLA")')
         tab.wait_for(state="visible", timeout=15000)
+        tab.scroll_into_view_if_needed()
+        page.wait_for_timeout(200)
         tab.click()
         page.wait_for_timeout(1500)
-        page.locator('[role="tabpanel"]:visible').wait_for(state="visible", timeout=15000)
+        _wait_for_element(page, '[role="tabpanel"]:visible', timeout=15000, state="visible")
 
-    _retry_with_refresh(page, _click_individual_tab)
+    _retry_action(page, _click_individual_tab, screenshot_name="click_individual_tab")
     expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
 
-    # 点击企业CLA tab（若获取不到则刷新重试）
+    # 点击企业CLA tab（若获取不到则刷新页面重试）
     def _click_corp_tab():
         tab = page.locator('[role="tab"]:has-text("企业CLA"), [role="tab"]:has-text("企业 CLA")')
         tab.wait_for(state="visible", timeout=15000)
+        tab.scroll_into_view_if_needed()
+        page.wait_for_timeout(200)
         tab.click()
         page.wait_for_timeout(1500)
-        page.locator('[role="tabpanel"]:visible').wait_for(state="visible", timeout=15000)
+        _wait_for_element(page, '[role="tabpanel"]:visible', timeout=15000, state="visible")
 
-    _retry_with_refresh(page, _click_corp_tab)
+    _retry_action(page, _click_corp_tab, screenshot_name="click_corp_tab")
     expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
 
 
