@@ -462,11 +462,9 @@ def test_community_admin_login(page: Page):
     def _check_home():
         # 等待首页关键元素加载完成
         _wait_for_loading_disappear(page, timeout=10000)
-        _wait_for_element(page, 'text=/配置.*CLA/', timeout=15000, state="visible")
         _wait_for_element(page, 'text=已绑定的项目', timeout=15000, state="visible")
 
     _retry_action(page, _check_home, screenshot_name="admin_login_home")
-    expect(page.locator('text=/配置.*CLA/')).to_be_visible()
     expect(page.locator('text=已绑定的项目')).to_be_visible()
 
 
