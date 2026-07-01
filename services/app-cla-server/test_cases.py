@@ -272,6 +272,140 @@ def _close_cookie_notice(page: Page):
         pass
 
 
+def _close_cookie_notice(page: Page):
+    """关闭 cookie 提示条（如果存在），避免遮挡后续操作。"""
+    try:
+        cookie_close = page.locator('.cookie-notice .close-icon')
+        if cookie_close.count() > 0 and cookie_close.first.is_visible():
+            cookie_close.first.click()
+            page.wait_for_timeout(800)
+            # 等待 cookie banner 消失，避免残留遮挡
+            try:
+                cookie_close.first.wait_for(state="hidden", timeout=5000)
+            except Exception:
+                pass
+            # 再次检查是否还有其他 cookie 通知
+            cookie_bar = page.locator('.cookie-banner, .cookie-notice, #cookie-banner')
+            if cookie_bar.count() > 0:
+                try:
+                    cookie_bar.first.wait_for(state="hidden", timeout=3000)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _close_error_dialog(page: Page):
+    """关闭系统错误/失败弹窗（element-plus MessageBox/Dialog），避免遮挡后续操作。"""
+    try:
+        # 检测常见错误弹窗：.el-message-box（错误提示框）和 .el-dialog（通用弹窗）
+        error_dialogs = [
+            '.el-message-box:visible',
+            '.el-dialog__wrapper:visible .el-dialog',
+            '.el-overlay:visible .el-dialog',
+        ]
+        for sel in error_dialogs:
+            dlg = page.locator(sel)
+            if dlg.count() > 0 and dlg.first.is_visible():
+                # 尝试点击确定/关闭按钮
+                try:
+                    ok_btn = page.locator('.el-message-box__btns .el-button, .el-dialog__footer .el-button:has-text("确定"), .el-dialog__footer .el-button:has-text("关闭")')
+                    if ok_btn.count() > 0 and ok_btn.first.is_visible():
+                        ok_btn.first.click()
+                        page.wait_for_timeout(800)
+                        # 等待弹窗消失
+                        try:
+                            dlg.first.wait_for(state="hidden", timeout=5000)
+                        except Exception:
+                            pass
+                        return True
+                except Exception:
+                    pass
+                # 兜底：尝试 ESC 键关闭
+                try:
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(500)
+                    try:
+                        dlg.first.wait_for(state="hidden", timeout=3000)
+                    except Exception:
+                        pass
+                    return True
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return False
+
+
+def _is_page_blank(page: Page) -> bool:
+    """检测页面是否为空白（body 内容极少或没有关键元素）。"""
+    try:
+        body_text = page.evaluate("() => document.body.innerText.trim().length")
+        if body_text < 10:
+            return True
+        # 检查是否有 Vue 挂载标记
+        has_app = page.evaluate("() => !!(document.querySelector('#app') || document.querySelector('.el-container'))")
+        return not has_app
+    except Exception:
+        return True
+
+
+def _is_login_page(page: Page) -> bool:
+    """检测当前页面是否在登录页（通过账号输入框是否存在判断）。"""
+    try:
+        account_input = page.locator('input[placeholder="账号"]')
+        if account_input.count() > 0 and account_input.first.is_visible():
+            return True
+        return False
+    except Exception:
+        return False
+
+
+def _safe_goto(page: Page, url: str, timeout: int = 30000):
+    """安全导航到页面，若页面白屏则重试。"""
+    for attempt in range(3):
+        try:
+            page.goto(url, timeout=timeout)
+            _wait_for_spa_ready(page, timeout=20000)
+            if not _is_page_blank(page):
+                return
+            # 如果页面空白，截图并刷新
+            _screenshot(page, f"goto_blank_{attempt}")
+        except Exception:
+            _screenshot(page, f"goto_fail_{attempt}")
+        if attempt < 2:
+            try:
+                page.reload(wait_until="networkidle", timeout=timeout)
+                _wait_for_spa_ready(page)
+            except Exception:
+                pass
+            page.wait_for_timeout(3000)
+    # 最后一次尝试
+    page.goto(url, timeout=timeout)
+    _wait_for_spa_ready(page, timeout=20000)
+
+    """关闭 cookie 提示条（如果存在），避免遮挡后续操作。"""
+    try:
+        cookie_close = page.locator('.cookie-notice .close-icon')
+        if cookie_close.count() > 0 and cookie_close.first.is_visible():
+            cookie_close.first.click()
+            page.wait_for_timeout(800)
+            # 等待 cookie banner 消失，避免残留遮挡
+            try:
+                cookie_close.first.wait_for(state="hidden", timeout=5000)
+            except Exception:
+                pass
+            # 再次检查是否还有其他 cookie 通知
+            cookie_bar = page.locator('.cookie-banner, .cookie-notice, #cookie-banner')
+            if cookie_bar.count() > 0:
+                try:
+                    cookie_bar.first.wait_for(state="hidden", timeout=3000)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def _wait_for_spa_ready(page: Page, timeout: int = 20000):
     """等待 SPA 页面渲染完成：networkidle + loading 消失 + 检测 body 中关键 Vue 挂载标记。"""
     # 1. 等待网络基本空闲
@@ -292,17 +426,25 @@ def _wait_for_spa_ready(page: Page, timeout: int = 20000):
     _wait_for_loading_disappear(page, timeout=5000)
 
 
-def _retry_action(page: Page, action, attempts: int = 5, wait_ms: int = 2000, screenshot_name: str = None):
+def _retry_action(page: Page, action, attempts: int = 5, wait_ms: int = 2000, screenshot_name: str = None, need_login: bool = False):
     """执行 action（一次元素操作），若元素获取不到（抛异常）则刷新页面后重试。
 
     增强：每次失败自动截图，刷新后等待 SPA 渲染完成再重试，清理 cookie 和 loading。
+    如果 need_login=True，重试前检测是否在登录页，如果是则重新登录。
     """
     last_exception = None
     for attempt in range(attempts):
         try:
             # 每次重试前先清理干扰
             _close_cookie_notice(page)
+            _close_error_dialog(page)
             _wait_for_loading_disappear(page, timeout=5000)
+
+            # 关键增强：如果需要在登录状态，检测是否回到了登录页
+            if need_login and _is_login_page(page):
+                _screenshot(page, f"{screenshot_name}_relogin_{attempt}")
+                _do_login(page, TEST_ACCOUNT, TEST_PASSWORD)
+
             action()
             return
         except Exception as e:
@@ -344,14 +486,14 @@ def _click_dropdown_sign(page: Page):
 
 
 def _do_login(page: Page, account: str, password: str):
-    """执行登录操作（账号+密码+复选框+登录按钮），含重试，若登录页面超时则刷新页面。"""
+    """执行登录操作（账号+密码+复选框+登录按钮），含重试，处理错误弹窗和白屏。"""
     for attempt in range(5):
         try:
-            page.goto(BASE_URL, timeout=30000)
-            _wait_for_spa_ready(page, timeout=20000)
+            # 使用安全导航，处理白屏
+            _safe_goto(page, BASE_URL, timeout=30000)
             _close_cookie_notice(page)
+            _close_error_dialog(page)
             _wait_for_element(page, 'input[placeholder="账号"]', timeout=20000, state="visible")
-            break
         except Exception as e:
             if attempt == 4:
                 _screenshot(page, "login_final_fail")
@@ -362,41 +504,78 @@ def _do_login(page: Page, account: str, password: str):
             except Exception:
                 pass
             page.wait_for_timeout(3000)
-    # 填充账号（健壮方式）
-    _safe_fill(page, 'input[placeholder="账号"]', account, timeout=15000, screenshot_name="login_fill_account")
-    # 填充密码（使用 focus + keyboard 输入，确保 Vue 表单正确绑定）
-    pwd_input = page.locator('input[placeholder="密码"]')
-    pwd_input.focus()
-    page.wait_for_timeout(300)
-    page.keyboard.press("Control+a")
-    page.wait_for_timeout(100)
-    page.keyboard.press("Delete")
-    page.wait_for_timeout(100)
-    page.keyboard.type(password, delay=60)
-    page.wait_for_timeout(800)
-    # 验证密码回填
-    try:
-        if pwd_input.input_value(timeout=5000) != password:
-            pwd_input.fill(password)
-            page.wait_for_timeout(500)
-    except Exception:
-        pass
-    # 勾选复选框（增加可见性和可点击性检查）
-    checkbox = page.locator('.el-checkbox')
-    checkbox.wait_for(state="visible", timeout=10000)
-    page.wait_for_timeout(300)
-    checkbox.click(timeout=10000)
-    page.wait_for_timeout(500)
-    # 点击登录（增加可点击检查）
-    login_btn = page.locator('.loginButton')
-    login_btn.wait_for(state="visible", timeout=10000)
-    page.wait_for_timeout(300)
-    login_btn.click(timeout=10000)
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(3000)
-    # 登录后 SPA 渲染检测 + loading 消失
-    _wait_for_spa_ready(page)
-    _wait_for_loading_disappear(page, timeout=10000)
+            continue  # 导航失败，重试
+
+        # 填充账号（健壮方式）
+        _safe_fill(page, 'input[placeholder="账号"]', account, timeout=15000, screenshot_name="login_fill_account")
+
+        # 填充密码（使用 focus + keyboard 输入，确保 Vue 表单正确绑定）
+        pwd_input = page.locator('input[placeholder="密码"]')
+        pwd_input.focus()
+        page.wait_for_timeout(300)
+        page.keyboard.press("Control+a")
+        page.wait_for_timeout(100)
+        page.keyboard.press("Delete")
+        page.wait_for_timeout(100)
+        page.keyboard.type(password, delay=60)
+        page.wait_for_timeout(800)
+
+        # 验证密码回填
+        try:
+            if pwd_input.input_value(timeout=5000) != password:
+                pwd_input.fill(password)
+                page.wait_for_timeout(500)
+        except Exception:
+            pass
+
+        # 勾选复选框
+        checkbox = page.locator('.el-checkbox')
+        checkbox.wait_for(state="visible", timeout=10000)
+        page.wait_for_timeout(300)
+        checkbox.click(timeout=10000)
+        page.wait_for_timeout(500)
+
+        # 点击登录
+        login_btn = page.locator('.loginButton')
+        login_btn.wait_for(state="visible", timeout=10000)
+        page.wait_for_timeout(300)
+        login_btn.click(timeout=10000)
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(3000)
+
+        # 关键增强：检测登录错误弹窗
+        if _close_error_dialog(page):
+            # 如果有关闭弹窗，说明登录失败了，需要重试
+            if attempt < 4:
+                page.wait_for_timeout(2000)
+                _screenshot(page, f"login_error_dialog_retry_{attempt}")
+                continue  # 重新尝试登录
+            else:
+                _screenshot(page, "login_error_dialog_final")
+                raise Exception("登录失败：系统错误弹窗")
+
+        # 登录后 SPA 渲染检测 + loading 消失
+        _wait_for_spa_ready(page)
+        _wait_for_loading_disappear(page, timeout=10000)
+
+        # 关键增强：验证是否真的登录成功（检查是否在首页）
+        try:
+            # 等待首页关键元素出现，如果不在首页则抛出异常触发重试
+            page.wait_for_selector('text=已绑定的项目, text=/配置.*CLA/', timeout=10000)
+        except PlaywrightTimeout:
+            # 如果不在首页，可能还在登录页，需要重新登录
+            if _is_login_page(page):
+                if attempt < 4:
+                    _screenshot(page, f"login_not_home_retry_{attempt}")
+                    continue  # 重新尝试登录
+                else:
+                    _screenshot(page, "login_not_home_final")
+                    raise Exception("登录失败：页面未跳转到首页")
+            # 如果在其他页面，可能已经是登录状态但页面不同
+            pass
+
+        # 登录成功，跳出循环
+        break
 
 
 @pytest.fixture(scope="function")
@@ -460,11 +639,14 @@ def test_community_admin_login(page: Page):
 
     # 断言：页面显示"配置CLA"按钮 + "已绑定的项目"，若元素获取不到则刷新页面重试
     def _check_home():
-        # 等待首页关键元素加载完成
-        _wait_for_loading_disappear(page, timeout=10000)
-        _wait_for_element(page, 'text=已绑定的项目', timeout=15000, state="visible")
+        # 等待首页关键元素加载完成（loading + 数据接口返回）
+        _wait_for_loading_disappear(page, timeout=15000)
+        # 增加更长缓冲，等待首页数据异步加载
+        page.wait_for_timeout(2000)
+        _wait_for_element(page, 'text=已绑定的项目', timeout=20000, state="visible")
 
-    _retry_action(page, _check_home, screenshot_name="admin_login_home")
+    # 关键增强：need_login=True，若刷新后回到登录页则自动重新登录
+    _retry_action(page, _check_home, screenshot_name="admin_login_home", need_login=True)
     expect(page.locator('text=已绑定的项目')).to_be_visible()
 
 
@@ -540,6 +722,28 @@ def test_view_cla_details(login_community_admin):
 
     _retry_action(page, _click_corp_tab, screenshot_name="click_corp_tab")
     expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
+
+
+# # === TC-UI-CORP-001 企业管理员登录及邮箱域名管理 ===
+# def test_corp_manager_email_domain(login_community_admin):
+#     ...
+
+# # === TC-UI-CORP-002 创建/删除管理员 ===
+# def test_corp_create_delete_admin(login_community_admin):
+#     ...
+
+# # === TC-UI-CORP-003 重置密码 ===
+# def test_corp_reset_password(login_community_admin):
+#     ...
+
+# # === TC-UI-SIGN-001 个人签署企业CLA流程 ===
+# def test_individual_corp_sign(login_community_admin):
+#     ...
+
+# # === TC-UI-SIGN-002 法人代表签署企业CLA ===
+# def test_represent_sign_corp_cla(login_community_admin):
+#     ...
+
 
 
 # # === TC-UI-CORP-001 企业管理员登录及邮箱域名管理 ===
