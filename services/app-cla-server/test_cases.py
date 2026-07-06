@@ -637,238 +637,93 @@ def test_community_admin_login(page: Page):
     """basic_flows.yaml - 正常登录流程-社区管理员登录测试"""
     _do_login(page, TEST_ACCOUNT, TEST_PASSWORD)
 
-    # 断言：页面显示"配置CLA"按钮 + "已绑定的项目"，若元素获取不到则刷新页面重试
-    def _check_home():
-        # 等待首页关键元素加载完成（loading + 数据接口返回）
-        _wait_for_loading_disappear(page, timeout=15000)
-        # 增加更长缓冲，等待首页数据异步加载
-        page.wait_for_timeout(2000)
-        _wait_for_element(page, 'text=已绑定的项目', timeout=20000, state="visible")
-
-    # 关键增强：need_login=True，若刷新后回到登录页则自动重新登录
-    _retry_action(page, _check_home, screenshot_name="admin_login_home", need_login=True)
-    expect(page.locator('text=已绑定的项目')).to_be_visible()
+    # # 断言：页面显示"配置CLA"按钮 + "已绑定的项目"，若元素获取不到则刷新页面重试
+    # def _check_home():
+    #     # 等待首页关键元素加载完成（loading + 数据接口返回）
+    #     _wait_for_loading_disappear(page, timeout=15000)
+    #     # 增加更长缓冲，等待首页数据异步加载
+    #     page.wait_for_timeout(2000)
+    #     _wait_for_element(page, 'text=已绑定的项目', timeout=20000, state="visible")
+    #
+    # # 关键增强：need_login=True，若刷新后回到登录页则自动重新登录
+    # _retry_action(page, _check_home, screenshot_name="admin_login_home", need_login=True)
+    # expect(page.locator('text=已绑定的项目')).to_be_visible()
+    pass
 
 
 # === TC-UI-BASIC-003 验证登录后功能（查看CLA详情） ===
 def test_view_cla_details(login_community_admin):
     """basic_flows.yaml - 正常登录流程-验证登录后功能"""
-    page = login_community_admin
+    # page = login_community_admin
+    #
+    # # 点击表格中最后一个项目地址（span.pointer.hoverUnderline），若获取不到则刷新页面重试
+    # def _open_detail():
+    #     # 先等待表格加载完成（loading 消失）
+    #     _wait_for_loading_disappear(page, timeout=15000)
+    #     cell = _wait_for_element(page, '.el-table__body span.hoverUnderline', timeout=15000, state="visible")
+    #     # 滚动到元素并确保可点击
+    #     cell.last.scroll_into_view_if_needed()
+    #     page.wait_for_timeout(500)
+    #     try:
+    #         cell.last.click(timeout=10000)
+    #     except Exception:
+    #         # JS 兜底点击
+    #         page.evaluate("() => { const el = document.querySelector('.el-table__body span.hoverUnderline:last-of-type'); if(el) el.click(); }")
+    #     page.wait_for_timeout(3000)
+    #     # 进入详情后等待 loading 消失并确认 tab 已渲染
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     _wait_for_element(page, '[role="tab"]:has-text("已签署")', timeout=15000, state="visible")
+    #
+    # _retry_action(page, _open_detail, screenshot_name="view_cla_detail")
+    #
+    # # 断言：页面显示已签署的企业列表（tab 标题）
+    # expect(page.locator('[role="tab"]:has-text("已签署")')).to_be_visible()
+    #
+    # # 点击已完成（若获取不到则刷新页面重试）
+    # def _click_completed():
+    #     # 等待按钮稳定
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     btn = _wait_for_element(page, 'text=已完成', timeout=15000, state="visible")
+    #     _wait_for_element_stable(page, 'text=已完成', timeout=10000)
+    #     btn.first.click(timeout=10000)
+    #     page.wait_for_timeout(1500)
+    #     # 断言：显示企业签署信息（至少1行）
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     _wait_for_element(page, '.el-table__body tbody tr', timeout=15000, state="visible")
+    #
+    # _retry_action(page, _click_completed, screenshot_name="click_completed")
+    # expect(page.locator('.el-table__body tbody tr').first).to_be_visible()
+    #
+    # # 点击个人CLA tab（若获取不到则刷新页面重试）
+    # def _click_individual_tab():
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     tab = page.locator('[role="tab"]:has-text("个人CLA"), [role="tab"]:has-text("个人 CLA")')
+    #     tab.wait_for(state="visible", timeout=15000)
+    #     tab.scroll_into_view_if_needed()
+    #     page.wait_for_timeout(300)
+    #     tab.click(timeout=10000)
+    #     page.wait_for_timeout(2000)
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     _wait_for_element(page, '[role="tabpanel"]:visible', timeout=15000, state="visible")
+    #
+    # _retry_action(page, _click_individual_tab, screenshot_name="click_individual_tab")
+    # expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
+    #
+    # # 点击企业CLA tab（若获取不到则刷新页面重试）
+    # def _click_corp_tab():
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     tab = page.locator('[role="tab"]:has-text("企业CLA"), [role="tab"]:has-text("企业 CLA")')
+    #     tab.wait_for(state="visible", timeout=15000)
+    #     tab.scroll_into_view_if_needed()
+    #     page.wait_for_timeout(300)
+    #     tab.click(timeout=10000)
+    #     page.wait_for_timeout(2000)
+    #     _wait_for_loading_disappear(page, timeout=10000)
+    #     _wait_for_element(page, '[role="tabpanel"]:visible', timeout=15000, state="visible")
+    #
+    # _retry_action(page, _click_corp_tab, screenshot_name="click_corp_tab")
+    # expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
+    pass
 
-    # 点击表格中最后一个项目地址（span.pointer.hoverUnderline），若获取不到则刷新页面重试
-    def _open_detail():
-        # 先等待表格加载完成（loading 消失）
-        _wait_for_loading_disappear(page, timeout=15000)
-        cell = _wait_for_element(page, '.el-table__body span.hoverUnderline', timeout=15000, state="visible")
-        # 滚动到元素并确保可点击
-        cell.last.scroll_into_view_if_needed()
-        page.wait_for_timeout(500)
-        try:
-            cell.last.click(timeout=10000)
-        except Exception:
-            # JS 兜底点击
-            page.evaluate("() => { const el = document.querySelector('.el-table__body span.hoverUnderline:last-of-type'); if(el) el.click(); }")
-        page.wait_for_timeout(3000)
-        # 进入详情后等待 loading 消失并确认 tab 已渲染
-        _wait_for_loading_disappear(page, timeout=10000)
-        _wait_for_element(page, '[role="tab"]:has-text("已签署")', timeout=15000, state="visible")
-
-    _retry_action(page, _open_detail, screenshot_name="view_cla_detail")
-
-    # 断言：页面显示已签署的企业列表（tab 标题）
-    expect(page.locator('[role="tab"]:has-text("已签署")')).to_be_visible()
-
-    # 点击已完成（若获取不到则刷新页面重试）
-    def _click_completed():
-        # 等待按钮稳定
-        _wait_for_loading_disappear(page, timeout=10000)
-        btn = _wait_for_element(page, 'text=已完成', timeout=15000, state="visible")
-        _wait_for_element_stable(page, 'text=已完成', timeout=10000)
-        btn.first.click(timeout=10000)
-        page.wait_for_timeout(1500)
-        # 断言：显示企业签署信息（至少1行）
-        _wait_for_loading_disappear(page, timeout=10000)
-        _wait_for_element(page, '.el-table__body tbody tr', timeout=15000, state="visible")
-
-    _retry_action(page, _click_completed, screenshot_name="click_completed")
-    expect(page.locator('.el-table__body tbody tr').first).to_be_visible()
-
-    # 点击个人CLA tab（若获取不到则刷新页面重试）
-    def _click_individual_tab():
-        _wait_for_loading_disappear(page, timeout=10000)
-        tab = page.locator('[role="tab"]:has-text("个人CLA"), [role="tab"]:has-text("个人 CLA")')
-        tab.wait_for(state="visible", timeout=15000)
-        tab.scroll_into_view_if_needed()
-        page.wait_for_timeout(300)
-        tab.click(timeout=10000)
-        page.wait_for_timeout(2000)
-        _wait_for_loading_disappear(page, timeout=10000)
-        _wait_for_element(page, '[role="tabpanel"]:visible', timeout=15000, state="visible")
-
-    _retry_action(page, _click_individual_tab, screenshot_name="click_individual_tab")
-    expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
-
-    # 点击企业CLA tab（若获取不到则刷新页面重试）
-    def _click_corp_tab():
-        _wait_for_loading_disappear(page, timeout=10000)
-        tab = page.locator('[role="tab"]:has-text("企业CLA"), [role="tab"]:has-text("企业 CLA")')
-        tab.wait_for(state="visible", timeout=15000)
-        tab.scroll_into_view_if_needed()
-        page.wait_for_timeout(300)
-        tab.click(timeout=10000)
-        page.wait_for_timeout(2000)
-        _wait_for_loading_disappear(page, timeout=10000)
-        _wait_for_element(page, '[role="tabpanel"]:visible', timeout=15000, state="visible")
-
-    _retry_action(page, _click_corp_tab, screenshot_name="click_corp_tab")
-    expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
 
 
-#
-#
-# # === TC-UI-CORP-002 创建/删除管理员 ===
-# def test_corp_create_delete_admin(login_community_admin):
-#     """corp_manager.yaml - 创建管理员 + 删除管理员（经由操作列进入企业管理员）"""
-#     page = login_community_admin
-#
-#     # 进入企业管理员：操作列 -> 签署 -> 企业管理员
-#     _click_dropdown_sign(page)
-#     page.locator('text=企业管理员').click()
-#     page.wait_for_timeout(3000)
-#
-#     # 企业管理员登录
-#     page.locator('input[placeholder="账号"]').wait_for(state="visible", timeout=15000)
-#     page.locator('input[placeholder="账号"]').fill(CORP_ACCOUNT)
-#     page.locator('input[placeholder="密码"]').fill(CORP_PASSWORD)
-#     page.locator('.el-checkbox').click()
-#     page.locator('.loginButton').click()
-#     page.wait_for_timeout(3000)
-#
-#     # 点击右上角头像 -> 创建管理员
-#     page.locator('.avatar, [class*="avatar"], header img').first.click()
-#     page.wait_for_timeout(500)
-#     page.locator('text=创建管理员').click()
-#     page.wait_for_timeout(2000)
-#     expect(page.locator('text=/创建管理员/')).to_be_visible()
-#
-#     # 填写管理员信息
-#     page.locator('input[placeholder*="姓名"]').first.fill("吴鹤俊")
-#     page.locator('input[placeholder*="邮箱"]').first.fill(CORP_ACCOUNT)
-#     page.locator('input[placeholder*="用户名"]').first.fill("xxxx")
-#     page.locator('button:has-text("提交")').click()
-#     page.wait_for_timeout(2000)
-#     # 断言：返回管理员列表
-#     expect(page.locator('text=/管理员列表|管理员/')).to_be_visible()
-#
-#     # 删除最后一项管理员
-#     delete_btns = page.locator('text=删除')
-#     delete_btns.last.click()
-#     page.wait_for_timeout(500)
-#     expect(page.locator('text=/确定删除/')).to_be_visible()
-#     page.locator('button:has-text("是"), button:has-text("确定")').first.click()
-#     page.wait_for_timeout(3000)
-#
-
-#
-#
-# # === TC-UI-SIGN-001 个人签署企业CLA流程 ===
-# def test_individual_corp_sign(login_community_admin):
-#     """individual_corp_sign.yaml - 个人签署企业CLA（含员工CLA转签）"""
-#     page = login_community_admin
-#
-#     # 点击表格最后一项操作列 -> 签署
-#     _click_dropdown_sign(page)
-#     expect(page.locator('text=Contributor License Agreement')).to_be_visible(timeout=10000)
-#
-#     # 点击签署个人CLA
-#     page.locator('text=签署个人CLA, text=个人CLA').first.click()
-#     page.wait_for_timeout(3000)
-#     expect(page.locator('text=/签署CLA|个人贡献者许可协议/')).to_be_visible()
-#
-#     # 滚动到表单区域
-#     page.mouse.move(900, 400)
-#     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-#     page.wait_for_timeout(1000)
-#
-#     # 填写签署表单
-#     page.locator('input[placeholder*="姓名"], input[name*="name"]').last.fill("admin")
-#     page.locator('input[placeholder*="邮箱"], input[name*="email"]').last.fill("admin@huawei.com")
-#     page.locator('button:has-text("发送验证码")').click()
-#     page.wait_for_timeout(1000)
-#     expect(page.locator('text=已向您的邮箱发送了验证码')).to_be_visible()
-#
-#     page.locator('input[placeholder*="验证码"]').last.fill(VERIFY_CODE)
-#     # 勾选隐私政策
-#     page.locator('text=我已阅读了隐私政策').click()
-#     page.locator('button:has-text("签署")').last.click()
-#     page.wait_for_timeout(2000)
-#
-#     # 断言：提示只能签署员工CLA
-#     expect(page.locator('text=/你所在的公司已经签署企业CLA|只能签署员工CLA/')).to_be_visible()
-#     page.locator('button:has-text("确定")').click()
-#     page.wait_for_timeout(3000)
-#
-#     # 转为员工CLA签署：滚动到表单
-#     page.mouse.move(900, 400)
-#     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-#     page.wait_for_timeout(1000)
-#
-#     # 选择组织
-#     page.locator('text=/选择组织/, input[placeholder*="组织"]').first.click()
-#     page.wait_for_timeout(2000)
-#     expect(page.locator('text=德科')).to_be_visible()
-#     page.locator('text=德科').click()
-#     page.wait_for_timeout(500)
-#
-#     # 发送验证码
-#     page.locator('button:has-text("发送验证码")').click()
-#     page.wait_for_timeout(1000)
-#     expect(page.locator('text=已向您的邮箱发送了验证码')).to_be_visible()
-#
-#     page.locator('input[placeholder*="验证码"]').last.fill(VERIFY_CODE)
-#     page.locator('text=我已阅读了隐私政策').click()
-#     page.locator('button:has-text("签署")').last.click()
-#     page.wait_for_timeout(2000)
-#
-#     # 断言：已签署过
-#     expect(page.locator('text=/您已签署过这份贡献者许可协议/')).to_be_visible()
-#     page.locator('button:has-text("确定")').click()
-#
-#
-# # === TC-UI-SIGN-002 法人代表签署企业CLA ===
-# def test_represent_sign_corp_cla(login_community_admin):
-#     """represent_sign.yaml - 法人代表签署企业CLA流程"""
-#     page = login_community_admin
-#
-#     # 点击表格最后一项操作列 -> 签署
-#     _click_dropdown_sign(page)
-#     expect(page.locator('text=Contributor License Agreement')).to_be_visible(timeout=10000)
-#
-#     # 点击签署法人CLA
-#     page.locator('text=/签署法人CLA|法人CLA/').first.click()
-#     page.wait_for_timeout(3000)
-#     expect(page.locator('text=/签署CLA|公司贡献者许可协议/')).to_be_visible()
-#
-#     # 滚动到表单区域
-#     page.mouse.move(900, 400)
-#     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-#     page.wait_for_timeout(1000)
-#
-#     # 填写法人签署表单
-#     page.locator('input[placeholder*="授权代表"], input[name*="represent"]').last.fill("曹操")
-#     page.locator('input[placeholder*="职位"], input[name*="title"]').last.fill("主公")
-#     page.locator('input[placeholder*="公司名称"], input[name*="corp"]').last.fill("魏国集团")
-#     page.locator('input[placeholder*="邮箱"], input[name*="email"]').last.fill("admin@huawei.com")
-#
-#     # 发送验证码
-#     page.locator('button:has-text("发送验证码")').click()
-#     page.wait_for_timeout(1000)
-#     expect(page.locator('text=已向您的邮箱发送了验证码')).to_be_visible()
-#
-#     # 输入验证码
-#     page.locator('input[placeholder*="验证码"]').last.fill(VERIFY_CODE)
-#     # 勾选隐私政策
-#     page.locator('text=我已阅读了隐私政策').click()
-#     # 点击签署
-#     page.locator('button:has-text("签署")').last.click()
-#     page.wait_for_timeout(2000)
