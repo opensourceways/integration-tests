@@ -1,6 +1,4 @@
-# test_homepage.py
 # pytest 标准格式：首页标准浏览校验
-# 运行方式：pytest test_homepage.py -v
 
 import pytest
 import re
