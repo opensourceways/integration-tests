@@ -1,0 +1,5 @@
+# openEuler Commercial Release Automation
+# Playwright Python dependencies
+
+playwright>=1.40.0
+pytest-playwright>=0.4.0
