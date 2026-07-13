@@ -1,0 +1,14 @@
+"""
+项目依赖清单
+requirements.txt
+"""
+# 核心自动化框架
+playwright>=1.40.0
+
+# 测试框架（pytest + 插件）
+pytest>=7.4.0
+pytest-rerunfailures>=12.0   # 失败重试插件（可选，用于异常场景重跑验证）
+
+# 报告与日志增强（可选扩展）
+# allure-pytest>=2.13.0      # 如需 Allure 可视化报告，取消注释并安装
+# pytest-html>=4.1.0         # 如需 HTML 简易报告，取消注释并安装
