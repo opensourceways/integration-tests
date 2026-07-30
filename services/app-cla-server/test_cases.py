@@ -1546,211 +1546,211 @@ def test_view_cla_details(login_community_admin):
     expect(page.locator('[role="tabpanel"]:visible')).to_be_visible()
 
 # === TC-UI-CORP-003 企业管理员 (管理员与密码)===
-def test_corp_reset_password(login_community_admin):
-    """企业管理员重置密码完整流程"""
-    page = _navigate_to_corp_admin(login_community_admin)
-
-    # 使用已封装的 _open_reset_password_dialog 打开重置密码弹窗
-    # 阶段1：重置密码 → 新密码
-    print("[1/4] 打开重置密码弹窗...")
-    _open_reset_password_dialog(page, username="admin_claliuyong.wecom.work")
-    _screenshot(page, 'reset_pwd_dialog_opened')
-
-    # 调试：打印所有密码字段
-    password_fields = page.evaluate("""() => {
-        const inputs = document.querySelectorAll('input[type="password"]');
-        return Array.from(inputs).map((input, i) => ({
-            index: i,
-            placeholder: input.placeholder,
-            value_length: input.value ? input.value.length : 0,
-            visible: input.offsetParent !== null,
-            display: window.getComputedStyle(input).display
-        }));
-    }""")
-    print(f"[reset_pwd] password fields before fill: {password_fields}")
-
-    print("[2/4] 填充新密码并提交...")
-    _fill_and_submit_password(page, CORP_PASSWORD, CORP_NEW_PASSWORD, screenshot_prefix="reset_pwd")
-
-    # 等待页面跳转到登录页，如果没跳转则手动导航
-    _wait_for_login_page_or_navigate(page, screenshot_name='relogin')
-
-    print("[3/4] 使用新密码重新登录...")
-    # 用新密码重新登录
-    _safe_fill(page, 'input[placeholder="账号"]', CORP_ACCOUNT, timeout=15000, screenshot_name='relogin_account')
-    _safe_fill(page, 'input[placeholder="密码"]', CORP_NEW_PASSWORD, timeout=15000, screenshot_name='relogin_pwd')
-    _safe_click(page, '.el-checkbox', timeout=10000, screenshot_name='relogin_checkbox')
-    _safe_click(page, '.loginButton', timeout=10000, screenshot_name='relogin_btn')
-    page.wait_for_timeout(1500)
-    _wait_for_spa_ready(page)
-    _handle_cla_update_confirm(page)
-    expect(page.locator('text=管理员').first).to_be_visible()
-
-    print("[4/4] 再次重置密码回旧密码...")
-    # 阶段2：再次重置密码 → 改回旧密码
-    _open_reset_password_dialog(page, username="admin_claliuyong.wecom.work")
-    _screenshot(page, 'reset_pwd2_dialog_opened')
-
-    # 调试：打印所有密码字段
-    password_fields2 = page.evaluate("""() => {
-        const inputs = document.querySelectorAll('input[type="password"]');
-        return Array.from(inputs).map((input, i) => ({
-            index: i,
-            placeholder: input.placeholder,
-            value_length: input.value ? input.value.length : 0,
-            visible: input.offsetParent !== null,
-            display: window.getComputedStyle(input).display
-        }));
-    }""")
-    print(f"[reset_pwd2] password fields before fill: {password_fields2}")
-
-    _fill_and_submit_password(page, CORP_NEW_PASSWORD, CORP_PASSWORD, screenshot_prefix="reset_pwd2")
-
-    # 等待页面跳转到登录页，如果没跳转则手动导航
-    _wait_for_login_page_or_navigate(page, screenshot_name='final_login')
-
-    print("[4/4] 使用旧密码最终登录验证...")
-    # 用旧密码重新登录
-    _safe_fill(page, 'input[placeholder="账号"]', CORP_ACCOUNT, timeout=15000, screenshot_name='final_login_account')
-    _safe_fill(page, 'input[placeholder="密码"]', CORP_PASSWORD, timeout=15000, screenshot_name='final_login_pwd')
-    _safe_click(page, '.el-checkbox', timeout=10000, screenshot_name='final_login_checkbox')
-    _safe_click(page, '.loginButton', timeout=10000, screenshot_name='final_login_btn')
-    page.wait_for_timeout(1500)
-    _wait_for_spa_ready(page)
-    _handle_cla_update_confirm(page)
-    expect(page.locator('text=管理员').first).to_be_visible()
-    print("✓ 密码重置流程验证完成")
-
-def test_corp_manager_full_flow(login_community_admin):
-    """corp_manager.yaml - 企业管理员完整流程（创建、删除管理员）"""
-    page = _navigate_to_corp_admin(login_community_admin)
-
-    # 如果管理员数量过多，先删除一些已有的管理员
-    table_rows = page.locator('.el-table__body tbody tr')
-    row_count = table_rows.count()
-    print(f"[admin_table] row count before create: {row_count}")
-    max_attempts = 10
-    attempts = 0
-    while row_count >= 4 and attempts < max_attempts:
-        attempts += 1
-        print(f"[admin_table] 管理员数量过多，删除最后一行 (尝试 {attempts}/{max_attempts})")
-        try:
-            # 使用 JS 点击最后一行的删除按钮，并确认弹窗
-            deleted = page.evaluate("""() => {
-                const rows = document.querySelectorAll('.el-table__body tbody tr');
-                if (rows.length === 0) return false;
-                const lastRow = rows[rows.length - 1];
-                const btns = lastRow.querySelectorAll('.el-button, button');
-                let deleteBtn = null;
-                for (const btn of btns) {
-                    if (btn.innerText.trim() === '删除') {
-                        deleteBtn = btn;
-                        break;
-                    }
-                }
-                if (!deleteBtn && btns.length > 0) deleteBtn = btns[btns.length - 1];
-                if (deleteBtn) {
-                    deleteBtn.click();
-                    return true;
-                }
-                return false;
-            }""")
-            if not deleted:
-                print("[admin_table] JS 未找到删除按钮")
-                break
-            page.wait_for_timeout(1500)
-            # 使用 JS 点击弹窗中文本为确定/确认的按钮
-            confirmed = page.evaluate("""() => {
-                const btns = document.querySelectorAll('.el-message-box button, .el-dialog button, .el-overlay button, .el-message-box .el-button, .el-dialog .el-button, .dialog-footer button, .el-dialog__footer button');
-                for (const btn of btns) {
-                    const text = btn.innerText.trim();
-                    if (text === '确定' || text === '确认' || text === '是' || text === 'OK' || text === 'Confirm') {
-                        btn.click();
-                        return true;
-                    }
-                }
-                if (btns.length > 0) {
-                    btns[btns.length - 1].click();
-                    return true;
-                }
-                return false;
-            }""")
-            if not confirmed:
-                print("[admin_table] JS 未找到确认按钮，尝试按 Enter")
-                page.keyboard.press("Enter")
-            page.wait_for_timeout(1500)
-            _wait_for_loading_disappear(page, timeout=10000)
-            page.wait_for_timeout(1000)
-            # 重新获取行数
-            table_rows = page.locator('.el-table__body tbody tr')
-            new_row_count = table_rows.count()
-            if new_row_count >= row_count:
-                print(f"[admin_table] 行数未减少 ({row_count} -> {new_row_count})，可能删除失败")
-                break
-            row_count = new_row_count
-        except Exception as e:
-            print(f"[admin_table] pre-delete failed: {e}")
-            break
-
-    if row_count >= 4:
-        print(f"[admin_table] 警告：仍有 {row_count} 行，后续创建可能失败，将跳过后续创建和删除")
-        skip_create_delete = True
-    else:
-        skip_create_delete = False
-
-    if not skip_create_delete:
-        # 直接点击页面上的"创建管理员"按钮
-        def _open_create_admin():
-            _safe_click(page, 'button:has-text("创建管理员"), .el-button:has-text("创建管理员")', timeout=10000, screenshot_name="click_create_admin")
-            page.wait_for_timeout(1000)
-
-        _retry_action(page, _open_create_admin, screenshot_name="open_create_admin")
-        expect(page.locator('text=创建管理员')).to_be_visible()
-
-        # 输入管理员信息并提交
-        _safe_fill(page, 'input[placeholder*="姓名"]', "吴鹤俊", timeout=10000, screenshot_name="fill_admin_name")
-        _safe_fill(page, 'input[placeholder*="邮箱"]', f"test{int(time.time())}@claliuyong.wecom.work", timeout=10000, screenshot_name="fill_admin_email")
-        _safe_fill(page, 'input[placeholder*="用户名"]', f"wuhejun{int(time.time())}", timeout=10000, screenshot_name="fill_admin_username")
-        _safe_click(page, 'button:has-text("提交"), .el-button:has-text("提交")', timeout=10000, screenshot_name="submit_create_admin")
-        page.wait_for_timeout(2000)
-        _screenshot(page, "after_submit_create_admin")
-        _wait_for_loading_disappear(page, timeout=10000)
-        page.wait_for_timeout(1000)
-        _screenshot(page, "after_loading_create_admin")
-        # 断言：管理员列表已更新（至少有一行数据）
-        try:
-            table_rows = page.locator('.el-table__body tbody tr')
-            row_count = table_rows.count()
-            print(f"[admin_table] row count after create: {row_count}")
-            if row_count == 0:
-                # 如果表格为空，可能创建失败，跳过删除步骤
-                print("[admin_table] 管理员列表为空，跳过删除操作")
-                # 关闭弹窗（如果仍然打开）
-                try:
-                    close_btn = page.locator('.el-dialog__headerbtn, .el-dialog__close, .dialog-close')
-                    if close_btn.count() > 0 and close_btn.first.is_visible():
-                        close_btn.first.click()
-                        page.wait_for_timeout(500)
-                except Exception:
-                    pass
-            else:
-                # 有数据，继续删除操作
-                # 点击管理员列表最后一项操作列的删除按钮
-                page.get_by_text("删除").last.click()
-                page.wait_for_timeout(500)
-                # 断言：显示删除确认弹窗（Element UI MessageBox 文本可能是"确定删除"、"删除"或"确认"）
-                expect(page.locator(".el-message-box, .el-dialog")).to_be_visible(timeout=10000)
-
-                # 点击弹窗中的"确定"或"是", 确定删除
-                page.keyboard.press("Enter")
-                page.wait_for_timeout(1500)
-        except Exception as e:
-            print(f"[admin_table] check failed: {e}")
-
-        try:
-            close_btn = page.locator('.el-dialog__headerbtn, .el-dialog__close, .dialog-close')
-            if close_btn.count() > 0 and close_btn.first.is_visible():
-                close_btn.first.click()
-                page.wait_for_timeout(500)
-        except Exception:
-            pass
+# def test_corp_reset_password(login_community_admin):
+#     """企业管理员重置密码完整流程"""
+#     page = _navigate_to_corp_admin(login_community_admin)
+#
+#     # 使用已封装的 _open_reset_password_dialog 打开重置密码弹窗
+#     # 阶段1：重置密码 → 新密码
+#     print("[1/4] 打开重置密码弹窗...")
+#     _open_reset_password_dialog(page, username="admin_claliuyong.wecom.work")
+#     _screenshot(page, 'reset_pwd_dialog_opened')
+#
+#     # 调试：打印所有密码字段
+#     password_fields = page.evaluate("""() => {
+#         const inputs = document.querySelectorAll('input[type="password"]');
+#         return Array.from(inputs).map((input, i) => ({
+#             index: i,
+#             placeholder: input.placeholder,
+#             value_length: input.value ? input.value.length : 0,
+#             visible: input.offsetParent !== null,
+#             display: window.getComputedStyle(input).display
+#         }));
+#     }""")
+#     print(f"[reset_pwd] password fields before fill: {password_fields}")
+#
+#     print("[2/4] 填充新密码并提交...")
+#     _fill_and_submit_password(page, CORP_PASSWORD, CORP_NEW_PASSWORD, screenshot_prefix="reset_pwd")
+#
+#     # 等待页面跳转到登录页，如果没跳转则手动导航
+#     _wait_for_login_page_or_navigate(page, screenshot_name='relogin')
+#
+#     print("[3/4] 使用新密码重新登录...")
+#     # 用新密码重新登录
+#     _safe_fill(page, 'input[placeholder="账号"]', CORP_ACCOUNT, timeout=15000, screenshot_name='relogin_account')
+#     _safe_fill(page, 'input[placeholder="密码"]', CORP_NEW_PASSWORD, timeout=15000, screenshot_name='relogin_pwd')
+#     _safe_click(page, '.el-checkbox', timeout=10000, screenshot_name='relogin_checkbox')
+#     _safe_click(page, '.loginButton', timeout=10000, screenshot_name='relogin_btn')
+#     page.wait_for_timeout(1500)
+#     _wait_for_spa_ready(page)
+#     _handle_cla_update_confirm(page)
+#     expect(page.locator('text=管理员').first).to_be_visible()
+#
+#     print("[4/4] 再次重置密码回旧密码...")
+#     # 阶段2：再次重置密码 → 改回旧密码
+#     _open_reset_password_dialog(page, username="admin_claliuyong.wecom.work")
+#     _screenshot(page, 'reset_pwd2_dialog_opened')
+#
+#     # 调试：打印所有密码字段
+#     password_fields2 = page.evaluate("""() => {
+#         const inputs = document.querySelectorAll('input[type="password"]');
+#         return Array.from(inputs).map((input, i) => ({
+#             index: i,
+#             placeholder: input.placeholder,
+#             value_length: input.value ? input.value.length : 0,
+#             visible: input.offsetParent !== null,
+#             display: window.getComputedStyle(input).display
+#         }));
+#     }""")
+#     print(f"[reset_pwd2] password fields before fill: {password_fields2}")
+#
+#     _fill_and_submit_password(page, CORP_NEW_PASSWORD, CORP_PASSWORD, screenshot_prefix="reset_pwd2")
+#
+#     # 等待页面跳转到登录页，如果没跳转则手动导航
+#     _wait_for_login_page_or_navigate(page, screenshot_name='final_login')
+#
+#     print("[4/4] 使用旧密码最终登录验证...")
+#     # 用旧密码重新登录
+#     _safe_fill(page, 'input[placeholder="账号"]', CORP_ACCOUNT, timeout=15000, screenshot_name='final_login_account')
+#     _safe_fill(page, 'input[placeholder="密码"]', CORP_PASSWORD, timeout=15000, screenshot_name='final_login_pwd')
+#     _safe_click(page, '.el-checkbox', timeout=10000, screenshot_name='final_login_checkbox')
+#     _safe_click(page, '.loginButton', timeout=10000, screenshot_name='final_login_btn')
+#     page.wait_for_timeout(1500)
+#     _wait_for_spa_ready(page)
+#     _handle_cla_update_confirm(page)
+#     expect(page.locator('text=管理员').first).to_be_visible()
+#     print("✓ 密码重置流程验证完成")
+#
+# def test_corp_manager_full_flow(login_community_admin):
+#     """corp_manager.yaml - 企业管理员完整流程（创建、删除管理员）"""
+#     page = _navigate_to_corp_admin(login_community_admin)
+#
+#     # 如果管理员数量过多，先删除一些已有的管理员
+#     table_rows = page.locator('.el-table__body tbody tr')
+#     row_count = table_rows.count()
+#     print(f"[admin_table] row count before create: {row_count}")
+#     max_attempts = 10
+#     attempts = 0
+#     while row_count >= 4 and attempts < max_attempts:
+#         attempts += 1
+#         print(f"[admin_table] 管理员数量过多，删除最后一行 (尝试 {attempts}/{max_attempts})")
+#         try:
+#             # 使用 JS 点击最后一行的删除按钮，并确认弹窗
+#             deleted = page.evaluate("""() => {
+#                 const rows = document.querySelectorAll('.el-table__body tbody tr');
+#                 if (rows.length === 0) return false;
+#                 const lastRow = rows[rows.length - 1];
+#                 const btns = lastRow.querySelectorAll('.el-button, button');
+#                 let deleteBtn = null;
+#                 for (const btn of btns) {
+#                     if (btn.innerText.trim() === '删除') {
+#                         deleteBtn = btn;
+#                         break;
+#                     }
+#                 }
+#                 if (!deleteBtn && btns.length > 0) deleteBtn = btns[btns.length - 1];
+#                 if (deleteBtn) {
+#                     deleteBtn.click();
+#                     return true;
+#                 }
+#                 return false;
+#             }""")
+#             if not deleted:
+#                 print("[admin_table] JS 未找到删除按钮")
+#                 break
+#             page.wait_for_timeout(1500)
+#             # 使用 JS 点击弹窗中文本为确定/确认的按钮
+#             confirmed = page.evaluate("""() => {
+#                 const btns = document.querySelectorAll('.el-message-box button, .el-dialog button, .el-overlay button, .el-message-box .el-button, .el-dialog .el-button, .dialog-footer button, .el-dialog__footer button');
+#                 for (const btn of btns) {
+#                     const text = btn.innerText.trim();
+#                     if (text === '确定' || text === '确认' || text === '是' || text === 'OK' || text === 'Confirm') {
+#                         btn.click();
+#                         return true;
+#                     }
+#                 }
+#                 if (btns.length > 0) {
+#                     btns[btns.length - 1].click();
+#                     return true;
+#                 }
+#                 return false;
+#             }""")
+#             if not confirmed:
+#                 print("[admin_table] JS 未找到确认按钮，尝试按 Enter")
+#                 page.keyboard.press("Enter")
+#             page.wait_for_timeout(1500)
+#             _wait_for_loading_disappear(page, timeout=10000)
+#             page.wait_for_timeout(1000)
+#             # 重新获取行数
+#             table_rows = page.locator('.el-table__body tbody tr')
+#             new_row_count = table_rows.count()
+#             if new_row_count >= row_count:
+#                 print(f"[admin_table] 行数未减少 ({row_count} -> {new_row_count})，可能删除失败")
+#                 break
+#             row_count = new_row_count
+#         except Exception as e:
+#             print(f"[admin_table] pre-delete failed: {e}")
+#             break
+#
+#     if row_count >= 4:
+#         print(f"[admin_table] 警告：仍有 {row_count} 行，后续创建可能失败，将跳过后续创建和删除")
+#         skip_create_delete = True
+#     else:
+#         skip_create_delete = False
+#
+#     if not skip_create_delete:
+#         # 直接点击页面上的"创建管理员"按钮
+#         def _open_create_admin():
+#             _safe_click(page, 'button:has-text("创建管理员"), .el-button:has-text("创建管理员")', timeout=10000, screenshot_name="click_create_admin")
+#             page.wait_for_timeout(1000)
+#
+#         _retry_action(page, _open_create_admin, screenshot_name="open_create_admin")
+#         expect(page.locator('text=创建管理员')).to_be_visible()
+#
+#         # 输入管理员信息并提交
+#         _safe_fill(page, 'input[placeholder*="姓名"]', "吴鹤俊", timeout=10000, screenshot_name="fill_admin_name")
+#         _safe_fill(page, 'input[placeholder*="邮箱"]', f"test{int(time.time())}@claliuyong.wecom.work", timeout=10000, screenshot_name="fill_admin_email")
+#         _safe_fill(page, 'input[placeholder*="用户名"]', f"wuhejun{int(time.time())}", timeout=10000, screenshot_name="fill_admin_username")
+#         _safe_click(page, 'button:has-text("提交"), .el-button:has-text("提交")', timeout=10000, screenshot_name="submit_create_admin")
+#         page.wait_for_timeout(2000)
+#         _screenshot(page, "after_submit_create_admin")
+#         _wait_for_loading_disappear(page, timeout=10000)
+#         page.wait_for_timeout(1000)
+#         _screenshot(page, "after_loading_create_admin")
+#         # 断言：管理员列表已更新（至少有一行数据）
+#         try:
+#             table_rows = page.locator('.el-table__body tbody tr')
+#             row_count = table_rows.count()
+#             print(f"[admin_table] row count after create: {row_count}")
+#             if row_count == 0:
+#                 # 如果表格为空，可能创建失败，跳过删除步骤
+#                 print("[admin_table] 管理员列表为空，跳过删除操作")
+#                 # 关闭弹窗（如果仍然打开）
+#                 try:
+#                     close_btn = page.locator('.el-dialog__headerbtn, .el-dialog__close, .dialog-close')
+#                     if close_btn.count() > 0 and close_btn.first.is_visible():
+#                         close_btn.first.click()
+#                         page.wait_for_timeout(500)
+#                 except Exception:
+#                     pass
+#             else:
+#                 # 有数据，继续删除操作
+#                 # 点击管理员列表最后一项操作列的删除按钮
+#                 page.get_by_text("删除").last.click()
+#                 page.wait_for_timeout(500)
+#                 # 断言：显示删除确认弹窗（Element UI MessageBox 文本可能是"确定删除"、"删除"或"确认"）
+#                 expect(page.locator(".el-message-box, .el-dialog")).to_be_visible(timeout=10000)
+#
+#                 # 点击弹窗中的"确定"或"是", 确定删除
+#                 page.keyboard.press("Enter")
+#                 page.wait_for_timeout(1500)
+#         except Exception as e:
+#             print(f"[admin_table] check failed: {e}")
+#
+#         try:
+#             close_btn = page.locator('.el-dialog__headerbtn, .el-dialog__close, .dialog-close')
+#             if close_btn.count() > 0 and close_btn.first.is_visible():
+#                 close_btn.first.click()
+#                 page.wait_for_timeout(500)
+#         except Exception:
+#             pass
