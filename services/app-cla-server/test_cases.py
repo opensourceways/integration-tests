@@ -270,6 +270,64 @@ def _close_cookie_notice(page: Page):
     except Exception:
         pass
 
+def _handle_cla_update_confirm(page: Page) -> bool:
+    """处理 CLA 内容更新确认流程（已获用户授权自动确认，2026-07-30）。
+
+    背景：测试环境 CLA 内容更新后，企业管理员登录会被强制要求确认，
+    点"取消"会被退回登录页、无法进入管理员页面。
+    两种触发形态：
+    1. 登录后弹出"CLA更新确认"弹窗 -> 点击"前往查看"进入确认页
+    2. 登录后直接跳转到 /sign-cla/{linkId}/corporation-update 确认页
+    在确认页勾选"我已知晓CLA内容更新并同意"并点击"确认"。
+    返回是否执行了确认流程。
+    """
+    handled = False
+    try:
+        dlg = page.locator('.el-dialog:has-text("CLA更新确认"), .el-message-box:has-text("CLA更新确认")')
+        if dlg.count() > 0 and dlg.first.is_visible():
+            print('[cla_update] 检测到 CLA更新确认 弹窗，点击"前往查看"')
+            btn = page.locator('.el-dialog button:has-text("前往查看"), .el-message-box button:has-text("前往查看")')
+            btn.first.click()
+            page.wait_for_timeout(3000)
+            try:
+                page.wait_for_load_state('networkidle', timeout=10000)
+            except PlaywrightTimeout:
+                pass
+            handled = True
+    except Exception as e:
+        print(f'[cla_update] dialog handling error: {e}')
+
+    if 'corporation-update' in page.url:
+        print('[cla_update] 进入 CLA 更新确认页，勾选并确认')
+        for attempt in range(3):
+            try:
+                checkbox = page.locator('.el-checkbox:has-text("我已知晓")')
+                checkbox.first.wait_for(state='visible', timeout=10000)
+                is_checked = page.evaluate("""() => {
+                    const cb = document.querySelector('.el-checkbox');
+                    return cb && cb.classList.contains('is-checked');
+                }""")
+                if not is_checked:
+                    checkbox.first.click()
+                    page.wait_for_timeout(500)
+                confirm_btn = page.locator('button:has-text("确 认"), button:has-text("确认"), button.loginButton')
+                confirm_btn.first.click()
+                page.wait_for_timeout(3000)
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except PlaywrightTimeout:
+                    pass
+                page.wait_for_timeout(2000)
+                if 'corporation-update' not in page.url:
+                    print(f'[cla_update] 确认完成，当前 URL: {page.url}')
+                    break
+                print(f'[cla_update] 确认后仍在确认页（尝试 {attempt + 1}/3）')
+            except Exception as e:
+                print(f'[cla_update] confirm attempt {attempt + 1} failed: {e}')
+                _screenshot(page, f'cla_update_confirm_{attempt}')
+        handled = True
+    return handled
+
 
 def _close_error_dialog(page: Page):
     """关闭系统错误/失败弹窗（element-plus MessageBox/Dialog），避免遮挡后续操作。"""
