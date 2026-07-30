@@ -1486,6 +1486,7 @@ def test_corp_reset_password(login_community_admin):
     _safe_click(page, '.loginButton', timeout=10000, screenshot_name='relogin_btn')
     page.wait_for_timeout(1500)
     _wait_for_spa_ready(page)
+    _handle_cla_update_confirm(page)
     expect(page.locator('text=管理员').first).to_be_visible()
 
     print("[4/4] 再次重置密码回旧密码...")
@@ -1519,6 +1520,7 @@ def test_corp_reset_password(login_community_admin):
     _safe_click(page, '.loginButton', timeout=10000, screenshot_name='final_login_btn')
     page.wait_for_timeout(1500)
     _wait_for_spa_ready(page)
+    _handle_cla_update_confirm(page)
     expect(page.locator('text=管理员').first).to_be_visible()
     print("✓ 密码重置流程验证完成")
 
