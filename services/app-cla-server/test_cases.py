@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """CLA 签署平台 UI 自动化测试脚本（增强健壮性版）
 ============================================
-
+用例来源：basic_flows.yaml / corp_manager.yaml / individual_corp_sign.yaml / represent_sign.yaml
+用例总数：8 条
+  - 稳定通过：3 条（test_language_switch, test_community_admin_login, test_view_cla_details）
+  - 待修复：5 条（依赖 element-plus el-dropdown @command 交互，Playwright 无法触发 Vue 内部事件）
 依赖：pytest, playwright (同步 API)
 环境变量（自动从 CLA/.env 加载）：
     TEST_ACCOUNT     - 社区管理员账号
@@ -27,6 +30,9 @@ import pytest
 from playwright.sync_api import Page, expect, TimeoutError as PlaywrightTimeout
 from pathlib import Path
 from dotenv import load_dotenv
+
+# 加载 .env 文件中的环境变量
+load_dotenv()
 
 BASE_URL = "https://clasign.test.osinfra.cn/index"
 
@@ -269,6 +275,7 @@ def _close_cookie_notice(page: Page):
                     pass
     except Exception:
         pass
+
 
 def _handle_cla_update_confirm(page: Page) -> bool:
     """处理 CLA 内容更新确认流程（已获用户授权自动确认，2026-07-30）。
@@ -971,6 +978,25 @@ def _navigate_to_corp_admin(page: Page):
         _wait_for_spa_ready(page)
         _screenshot(page, 'after_corp_login_click')
 
+        # CLA 内容更新确认（弹窗"前往查看"或直接跳转确认页两种形态），已获授权自动确认
+        if _handle_cla_update_confirm(page):
+            _wait_for_spa_ready(page)
+            page.wait_for_timeout(2000)
+            try:
+                if page.locator('button:has-text("创建管理员"), .el-table__body tbody tr').first.is_visible():
+                    print(f'[corp_login] CLA更新确认完成，已进入管理员页面（尝试 {login_attempt + 1}/5）')
+                    break
+            except Exception:
+                pass
+            try:
+                if page.locator('input[placeholder="账号"]').first.is_visible():
+                    print('[corp_login] CLA更新确认后回到登录页，重新登录')
+                    continue
+            except Exception:
+                pass
+            print('[corp_login] CLA更新确认后页面状态未知，跳出登录循环')
+            break
+
         # 增强错误弹窗检测：匹配任何弹窗内容
         error_dialog = page.locator('.el-message-box, .el-dialog')
         if error_dialog.count() > 0 and error_dialog.first.is_visible():
@@ -1018,7 +1044,18 @@ def _navigate_to_corp_admin(page: Page):
     # 登录后检查是否在企业管理员页面，如果不是（跳转回签署页），需要再次点击"企业管理员"
     current_url = page.url
     print(f'[corp_login] 登录后当前 URL: {current_url}')
-    if 'corporation-manager-login' in current_url or 'login' in current_url:
+    # 注意：该 SPA 可能在 corporation-manager-login URL 下直接渲染管理员页面，
+    # 不能仅凭 URL 判断登录失败，需先检查页面内容（创建管理员按钮/管理员表格）
+    manager_page_rendered = False
+    try:
+        manager_marker = page.locator('button:has-text("创建管理员"), .el-button:has-text("创建管理员"), .el-table__body tbody tr')
+        manager_page_rendered = manager_marker.count() > 0 and manager_marker.first.is_visible()
+    except Exception:
+        manager_page_rendered = False
+
+    if manager_page_rendered:
+        print('[corp_login] 管理员页面已在当前 URL 下渲染，无需刷新')
+    elif 'corporation-manager-login' in current_url or 'login' in current_url:
         print('[corp_login] 登录后仍在登录页面，刷新页面...')
         page.reload(wait_until='networkidle')
         _wait_for_spa_ready(page)
@@ -1097,6 +1134,8 @@ def _open_reset_password_dialog(page: Page, username: str = "admin_claliuyong.we
     3. 点击"重置密码"菜单项
     4. 等待密码输入框出现
     """
+    # 0. 重新登录后 CLA 更新确认流程可能再次出现，先处理避免遮挡操作
+    _handle_cla_update_confirm(page)
     # 1. 等待用户名加载完成（异步加载）
     for _ in range(20):
         has_user = page.evaluate(f"""() => {{
