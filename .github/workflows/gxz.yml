@@ -1,0 +1,12 @@
+on:
+  pull_request:
+    paths:
+      - 'tc-tests/api/**'
+jobs:
+  verify_pr_path_filter:
+    name: Verify PR path filter
+    runs-on: [ubuntu-latest, x64, small]
+    steps:
+      - name: (TC-236) verify API path trigger
+        run: |
+          echo "PASS: API path change triggered workflow"
