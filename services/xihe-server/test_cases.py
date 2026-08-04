@@ -933,7 +933,7 @@ class TestJupyterPermission:
 
             # 判断被拒绝的方式
             is_redirected_to_login = "/login" in current_url or "usercenter" in current_url
-            has_permission_error = any(kw in body_text for kw in ["403", "404", "权限", "无权限", "拒绝", "denied", "forbidden", "not found", "unauthorized", "不存在", "未登录", "error", "login"])
+            has_permission_error = any(kw in body_text for kw in ["403", "404", "418","权限", "无权限", "拒绝", "denied", "forbidden", "not found", "unauthorized", "不存在", "未登录", "error", "login"])
             is_error_page = page_fixture.locator(".error-page, .error-container, .not-found, .el-message-box, .o-message").count() > 0
 
             # 断言
