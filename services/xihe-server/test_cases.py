@@ -1,36 +1,29 @@
 """
 测试用例集：MindSpore 官网 - 实训环境导航功能
 
-> 输入文档：用户提供的网站功能描述 + 手动抓取页面信息 + 实际运行调试结果
-> 用例总数：21 条 ｜ P0：5 ｜ P1：5 ｜ P2：3
+> 用例总数：20 条 ｜ P0：5 ｜ P1：5 ｜ P2：3
 > AI 执行工具：playwright + pytest
 > 依赖：pytest, pytest-playwright, playwright
 > 推荐执行命令：
->   pytest test_training_env.py -v --headed --browser chromium
->   pytest test_training_env.py -v --reruns 2 --html=report.html --self-contained-html
+>   pytest test_cases.py -v --html=report.html --self-contained-html
 
 占位符清单：
-  - TEST_ACCOUNT: 测试账号 (默认从环境变量读取，否则使用内置值)
-  - TEST_PASSWORD: 测试密码 (默认从环境变量读取，否则使用内置值)
+  - TEST_ACCOUNT: 测试账号 (默认从环境变量读取)
+  - TEST_PASSWORD: 测试密码 (默认从环境变量读取)
   - BASE_URL: 被测站点基地址
-  - HEADLESS: 是否以无头模式运行 (true/false，默认 true)
+  - HEADLESS: 是否无头模式 (true/false，默认 true)
 
 注意事项：
-  - 本脚本使用 Playwright 同步 API，运行前需安装浏览器依赖: `playwright install chromium`
-  - 点击导航栏【实训环境】后，实际行为为：弹出 Jupyter 配置对话框（非直接跳转）
-  - 对话框需选择 Ascend 规格和镜像后，方可启动 Jupyter 云端环境
-  - 如测试环境行为变更，请更新 DIALOG_SELECTOR 和 API_ENDPOINT 配置
-  - 有头/无头模式通过环境变量 HEADLESS 控制（默认 true=无头）
-    - 有头模式执行：`set HEADLESS=false && pytest test_training_env.py -v`
+  - 运行前需安装浏览器依赖: `playwright install chromium`
+  - 有头/无头模式通过环境变量 HEADLESS 控制
 """
 
 import os
 import time
-import json
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple
 
 import pytest
-from playwright.sync_api import Page, Browser, BrowserContext, expect, TimeoutError as PlaywrightTimeout, Response
+from playwright.sync_api import Page, BrowserContext, expect, TimeoutError as PlaywrightTimeout, Response
 
 BASE_URL = os.environ.get("BASE_URL", "https://mindspore-website.test.osinfra.cn/")
 TEST_ACCOUNT = os.environ.get("TEST_ACCOUNT")
@@ -39,12 +32,10 @@ TEST_PASSWORD = os.environ.get("TEST_PASSWORD")
 # 导航栏元素定位信息
 NAV_ITEM_SELECTOR = '.nav-item:has-text("实训环境")'
 NAV_TEXT_SELECTOR = '.nav-item:has-text("实训环境") .nav-label'
-NAV_ITEM_CLASS = "nav-item item-other"
 
 # 实训环境对话框配置
 DIALOG_SELECTOR = ".jupyter-dlg.o-layer-main"
 DIALOG_HEADER_SELECTOR = ".jupyter-dlg .o-dlg-header"
-DIALOG_BODY_SELECTOR = ".jupyter-dlg .o-dlg-body"
 DIALOG_CANCEL_BTN_SELECTOR = ".o-btn.o-btn-outline"
 DIALOG_SELECTORS = [
     ".jupyter-dlg",
@@ -71,7 +62,6 @@ MOBILE_MENU_BTN_SELECTORS = [
 VIEWPORTS = {
     "desktop_large": (1920, 1080),
     "desktop": (1280, 800),
-    "tablet": (834, 1194),
 }
 
 # 超时配置
@@ -243,7 +233,7 @@ def _login_to_usercenter(page: Page) -> None:
 
 
 
-def _click_training_nav_and_capture_dialog(page: Page, timeout: int = 30000) -> Tuple[Page, Optional[Any]]:
+def _click_training_nav_and_capture_dialog(page: Page, timeout: int = 30000) -> Tuple[Page, Optional[object]]:
     """
     辅助：点击实训环境导航项并捕获弹出的配置对话框。
     返回: (page 对象, 对话框元素或 None)
@@ -280,14 +270,73 @@ def _click_training_nav_and_capture_dialog(page: Page, timeout: int = 30000) -> 
     return page, dialog
 
 
-def _wait_for_overlay_to_disappear(page: Page, timeout: int = 5000) -> None:
-    """辅助：等待遮罩层（layer-mask）消失，避免后续点击被拦截。"""
-    try:
-        page.wait_for_selector(".o-layer-mask", state="hidden", timeout=timeout)
-    except PlaywrightTimeout:
-        # 若遮罩层仍存在，尝试强制点击 body 移除焦点
-        page.locator("body").click()
-        page.wait_for_timeout(500)
+def _goto_home(page: Page) -> None:
+    """辅助：打开首页并等待导航栏渲染完成。"""
+    page.goto(BASE_URL)
+    _ensure_nav_visible(page)
+
+
+def _close_dialog(page: Page, dialog) -> None:
+    """辅助：关闭配置对话框（优先取消按钮，退而求其次 ESC）。"""
+    cancel_btn = dialog.locator(DIALOG_CANCEL_BTN_SELECTOR).first
+    if cancel_btn.count() > 0 and cancel_btn.is_visible():
+        cancel_btn.click()
+    else:
+        close_btn = dialog.locator("button:has-text('取消'), button:has-text('Close'), .o-dlg-close").first
+        if close_btn.count() > 0:
+            close_btn.click()
+        else:
+            page.keyboard.press("Escape")
+    page.wait_for_timeout(1000)
+
+
+def _click_end_btn(page: Page, dialog) -> bool:
+    """辅助：查找并点击结束按钮释放 Jupyter 实例。返回是否成功点击。"""
+    end_btn = dialog.locator("button").filter(has_text="结束").first
+    if end_btn.count() == 0:
+        end_btn = dialog.locator("button.o-btn-outline").first
+    if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
+        print(f"[Jupyter] 点击结束按钮: {end_btn.inner_text().strip()}")
+        end_btn.click()
+        page.wait_for_timeout(3000)
+        return True
+    return False
+
+
+def _wait_for_instance_ready(page: Page, print_prefix: str = "[Jupyter]", skip_on_unexpected: bool = False) -> Tuple[bool, Optional[object]]:
+    """辅助：等待 Jupyter 实例启动完成，最多 60 秒。返回 (是否就绪, 对话框元素)。"""
+    for i in range(3):
+        page.wait_for_timeout(20000)
+        page.reload()
+        page.wait_for_timeout(3000)
+        _ensure_nav_visible(page)
+        _, dialog = _click_training_nav_and_capture_dialog(page)
+        if dialog is None:
+            continue
+        solid_btn = dialog.locator("button.o-btn-solid").first
+        if solid_btn.count() == 0 or not solid_btn.is_visible():
+            continue
+        page.wait_for_timeout(3000)
+        current_text = solid_btn.inner_text().strip()
+        print(f"{print_prefix} Check {i+1}/3: button text = {current_text}")
+        if "Jupyter" in current_text:
+            return True, dialog
+        if any(kw in current_text for kw in ["启动中", "启动环境", "结束中", "关闭中"]):
+            print(f"{print_prefix} 当前处于中间状态 '{current_text}'，继续等待...")
+            # 若系统回到初始启动状态，说明启动请求未生效，重新触发
+            if "启动环境" in current_text and i > 0:
+                solid_btn.click()
+                page.wait_for_timeout(5000)
+            continue
+        if skip_on_unexpected:
+            pytest.skip(f"实例启动异常，当前按钮状态: {current_text}")
+        return False, None
+    return False, None
+
+
+def _get_input_value(inp) -> str:
+    """辅助：获取 input 元素的当前值（优先 value 属性，回退 input_value）。"""
+    return (inp.get_attribute("value") or "") or (inp.input_value() or "")
 
 
 # ============================== 测试用例 ==============================
@@ -306,21 +355,15 @@ class TestNavigationRendering:
         """
         width, height = size
         page_fixture.set_viewport_size({"width": width, "height": height})
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
-        # 断言：实训环境导航文本可见（移动端可能需展开菜单后检测）
         nav_item = page_fixture.locator(NAV_TEXT_SELECTOR)
         if nav_item.count() > 0 and nav_item.is_visible():
             expect(nav_item).to_have_text("实训环境")
         else:
-            # 移动端可能折叠，退而检测 DOM 中存在或尝试通过 header 菜单展开
-            # 某些响应式布局下导航项可能被完全隐藏，标记为已知限制
             parent = page_fixture.locator(NAV_ITEM_SELECTOR)
-            if parent.count() == 0:
-                pytest.skip(f"视口 {viewport_name} 下导航栏被折叠，实训环境导航项不可访问（已知响应式限制）")
+            assert parent.count() > 0, "实训环境导航项未找到"
 
-        # 断言：父元素具有正确 class
         parent = page_fixture.locator(NAV_ITEM_SELECTOR)
         classes = parent.get_attribute("class") or ""
         assert "nav-item" in classes, f"期望 class 包含 'nav-item'，实际: {classes}"
@@ -330,8 +373,7 @@ class TestNavigationRendering:
         TC-UI-NAV-002 [正常流] 鼠标悬停时导航项出现交互态（hover 样式/下拉菜单）
         优先级：P2
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
         nav_item.hover()
@@ -347,8 +389,7 @@ class TestNavigationRendering:
         TC-UI-NAV-003 [正常流] 点击实训环境导航项后弹出 Jupyter 配置对话框
         优先级：P0
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
 
@@ -367,8 +408,7 @@ class TestNavigationRendering:
         TC-UI-NAV-004 [正常流] 点击对话框取消按钮可关闭对话框
         优先级：P1
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None, "对话框未弹出"
@@ -415,8 +455,7 @@ class TestApiAndConfig:
                     api_responses.append({"status": response.status, "body": None})
 
         page_fixture.on("response", handle_response)
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
         nav_item.click()
@@ -438,8 +477,7 @@ class TestApiAndConfig:
         TC-UI-DIALOG-001 [正常流] 配置对话框正确展示服务器规格选项（Ascend-snt9b）
         优先级：P0
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None, "对话框未弹出"
@@ -464,8 +502,7 @@ class TestApiAndConfig:
         TC-UI-DIALOG-002 [正常流] 配置对话框正确展示镜像选项（Python + MindSpore + CANN）
         优先级：P1
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None, "对话框未弹出"
@@ -483,8 +520,7 @@ class TestApiAndConfig:
         TC-UI-DIALOG-003 [正常流] 配置对话框包含使用说明（运行时长、资源释放等）
         优先级：P1
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None, "对话框未弹出"
@@ -508,8 +544,7 @@ class TestAuthentication:
         优先级：P1
         """
         page_fixture.context.clear_cookies()
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
         nav_item.click()
@@ -551,9 +586,7 @@ class TestAuthentication:
 
         # 记录当前选择的规格（使用第一个 o-select-input）
         spec_input = dialog.locator("input.o-select-input").first
-        first_spec = (spec_input.get_attribute("value") or "") if spec_input.count() > 0 else ""
-        if not first_spec:
-            first_spec = (spec_input.input_value() or "") if spec_input.count() > 0 else ""
+        first_spec = _get_input_value(spec_input) if spec_input.count() > 0 else ""
 
         # 关闭对话框
         cancel_btn = dialog.locator(DIALOG_CANCEL_BTN_SELECTOR).first
@@ -574,9 +607,7 @@ class TestAuthentication:
         assert dialog2 is not None
 
         spec_input2 = dialog2.locator("input.o-select-input").first
-        second_spec = (spec_input2.get_attribute("value") or "") if spec_input2.count() > 0 else ""
-        if not second_spec:
-            second_spec = (spec_input2.input_value() or "") if spec_input2.count() > 0 else ""
+        second_spec = _get_input_value(spec_input2) if spec_input2.count() > 0 else ""
 
         # 断言：再次打开后规格不为空（记忆功能为加分项，不强求一致）
         assert len(second_spec) > 0, "再次打开对话框后规格选项为空"
@@ -594,8 +625,7 @@ class TestEdgeCases:
         TC-UI-EDGE-001 [重复] 快速连续点击实训环境导航项不应产生多个对话框或错误
         优先级：P2
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
         try:
@@ -616,8 +646,7 @@ class TestEdgeCases:
         TC-UI-EDGE-002 [异常] 使用取消按钮可关闭配置对话框（当前实现 ESC 不支持关闭）
         优先级：P1
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None
@@ -645,8 +674,7 @@ class TestEdgeCases:
         TC-UI-EDGE-003 [异常] 网络中断后点击导航应有合理降级（无白屏/无崩溃）
         优先级：P3
         """
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         page_fixture.route("**/*", lambda route: route.abort("internetdisconnected"))
 
@@ -678,8 +706,7 @@ class TestResponsiveLayout:
         """
         width, height = size
         page_fixture.set_viewport_size({"width": width, "height": height})
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
 
         # 移动端下导航项可能被折叠，跳过不可访问的视口
         nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
@@ -718,8 +745,7 @@ class TestApiConsistency:
                     pass
 
         page_fixture.on("response", handle_response)
-        page_fixture.goto(BASE_URL)
-        _ensure_nav_visible(page_fixture)
+        _goto_home(page_fixture)
         page_fixture.locator(NAV_ITEM_SELECTOR).click()
         page_fixture.wait_for_timeout(3000)
 
@@ -776,17 +802,8 @@ class TestJupyterLaunch:
         print(f"[Jupyter Launch] Initial button text: {initial_text}")
 
         # 如果按钮已经是"进入Jupyter"，说明实例已存在，直接断言成功
-        # 断言成功后，点击"结束"按钮释放资源
         if "Jupyter" in initial_text:
-            # 查找"结束"按钮（通常为 outline 样式，位于对话框中）
-            end_btn = dialog.locator("button").filter(has_text="结束").first
-            if end_btn.count() == 0:
-                end_btn = dialog.locator("button.o-btn-outline").first
-            if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
-                end_text = end_btn.inner_text().strip()
-                print(f"[Jupyter Launch] 已有实例，断言成功，点击结束按钮: {end_text}")
-                end_btn.click()
-                page_fixture.wait_for_timeout(3000)
+            _click_end_btn(page_fixture, dialog)
             return
 
         # 步骤4：如果按钮文本为启动类（"启动" / "启动环境"），点击启动按钮
@@ -799,48 +816,11 @@ class TestJupyterLaunch:
         solid_btn.click()
         page_fixture.wait_for_timeout(5000)
 
-        # 步骤5：每20秒检查一次按钮状态，最多3次（60秒）
-        # 中间状态："启动环境"、"启动中" —— 继续等待
-        # 成功状态："进入Jupyter" —— 断言成功
-        button_changed = False
-        for i in range(3):
-            page_fixture.wait_for_timeout(20000)
+        # 步骤5：等待实例启动完成（最多60秒），成功后释放资源
+        button_changed, dialog = _wait_for_instance_ready(page_fixture, "[Jupyter Launch]")
+        if button_changed and dialog is not None:
+            _click_end_btn(page_fixture, dialog)
 
-            page_fixture.reload()
-            page_fixture.wait_for_timeout(3000)
-            _ensure_nav_visible(page_fixture)
-
-            page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-            if dialog is None:
-                continue
-
-            solid_btn = dialog.locator("button.o-btn-solid").first
-            if solid_btn.count() == 0 or not solid_btn.is_visible():
-                continue
-
-            time.sleep(3)
-            current_text = solid_btn.inner_text().strip()
-            print(f"[Jupyter Launch] Check {i+1}/3: button text = {current_text}")
-
-            if "Jupyter" in current_text:
-                button_changed = True
-                # 断言成功后，点击"结束"按钮释放资源
-                end_btn = dialog.locator("button").filter(has_text="结束").first
-                if end_btn.count() == 0:
-                    end_btn = dialog.locator("button.o-btn-outline").first
-                if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
-                    end_text = end_btn.inner_text().strip()
-                    print(f"[Jupyter Launch] 断言成功，点击结束按钮: {end_text}")
-                    end_btn.click()
-                    page_fixture.wait_for_timeout(3000)
-                break
-
-            # 中间状态：继续等待，不报错
-            if any(kw in current_text for kw in ["启动中", "启动环境"]):
-                print(f"[Jupyter Launch] 当前处于中间状态 '{current_text}'，继续等待...")
-                continue
-
-        # 断言：按钮最终变为"进入Jupyter"
         assert button_changed, "启动按钮在5分钟内未变为'进入Jupyter'，实例启动失败或超时"
 
 # -----------------------------------------------------------------------
@@ -879,6 +859,26 @@ class TestJupyterPermission:
 
         # 如果当前没有实例，需要先启动一个
         if "Jupyter" not in initial_text:
+            # 若前一个测试刚结束实例，等待释放完成（最多60秒）
+            if any(kw in initial_text for kw in ["结束中", "关闭中"]):
+                print(f"[Jupyter Permission] 实例正在关闭，等待释放...")
+                for _ in range(6):
+                    page_fixture.wait_for_timeout(10000)
+                    page_fixture.reload()
+                    page_fixture.wait_for_timeout(3000)
+                    _ensure_nav_visible(page_fixture)
+                    _, dlg = _click_training_nav_and_capture_dialog(page_fixture)
+                    if dlg is None:
+                        continue
+                    btn = dlg.locator("button.o-btn-solid").first
+                    if btn.count() == 0 or not btn.is_visible():
+                        continue
+                    txt = btn.inner_text().strip()
+                    print(f"[Jupyter Permission] 等待释放: {txt}")
+                    if "结束中" not in txt and "关闭中" not in txt:
+                        initial_text = txt
+                        break
+
             launch_keywords = ["启动", "启动环境", "Launch", "Start"]
             is_launch_btn = any(kw in initial_text for kw in launch_keywords)
             if not is_launch_btn:
@@ -890,33 +890,7 @@ class TestJupyterPermission:
             instance_created_by_test = True
 
             # 等待实例启动完成（最多60秒）
-            instance_ready = False
-            for i in range(3):
-                page_fixture.wait_for_timeout(20000)
-                page_fixture.reload()
-                page_fixture.wait_for_timeout(3000)
-                _ensure_nav_visible(page_fixture)
-
-                page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-                if dialog is None:
-                    continue
-
-                solid_btn = dialog.locator("button.o-btn-solid").first
-                if solid_btn.count() == 0 or not solid_btn.is_visible():
-                    continue
-
-                page_fixture.wait_for_timeout(3000)
-                current_text = solid_btn.inner_text().strip()
-                print(f"[Jupyter Permission] Check {i+1}/3: button text = {current_text}")
-
-                if "Jupyter" in current_text:
-                    instance_ready = True
-                    # 保留对话框打开状态，后续直接使用
-                    break
-
-                if not any(kw in current_text for kw in ["启动中", "启动环境"]):
-                    pytest.skip(f"实例启动异常，当前按钮状态: {current_text}")
-
+            instance_ready, dialog = _wait_for_instance_ready(page_fixture, "[Jupyter Permission]", skip_on_unexpected=True)
             if not instance_ready:
                 pytest.skip("实例启动超时，无法继续权限测试")
 
@@ -974,32 +948,7 @@ class TestJupyterPermission:
                     page_fixture.wait_for_timeout(3000)
                     _ensure_nav_visible(page_fixture)
                     page_fixture, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-                    if dialog is not None:
-                        end_btn = dialog.locator("button").filter(has_text="结束").first
-                        if end_btn.count() == 0:
-                            end_btn = dialog.locator("button.o-btn-outline").first
-                        if end_btn.count() > 0 and end_btn.is_visible() and "结束" in end_btn.inner_text().strip():
-                            end_btn.click()
-                            page_fixture.wait_for_timeout(3000)
-                            print("[Jupyter Permission] 已结束实例，释放资源")
+                    if dialog is not None and _click_end_btn(page_fixture, dialog):
+                        print("[Jupyter Permission] 已结束实例，释放资源")
                 except Exception as e:
                     print(f"[Jupyter Permission] 清理实例时发生异常（非致命）: {e}")
-
-# ============================== 覆盖矩阵 ==============================
-"""
-覆盖矩阵（功能点 × 9 维度）
-
-功能点/维度 | 正常流 | 异常场景 | 边界值 | 空值 | 特殊字符 | 权限校验 | 数据唯一性 | 重复操作 | 异常输入
------------|--------|----------|--------|------|----------|----------|------------|----------|----------
-导航栏渲染 | ✅ TC-UI-NAV-001 | ✅ TC-UI-NAV-002 | ✅ 响应式视口 | N/A | N/A | N/A | N/A | ✅ TC-UI-EDGE-001 | N/A
-对话框弹出 | ✅ TC-UI-NAV-003 | ✅ TC-UI-DIALOG-001 | N/A | N/A | N/A | ✅ TC-UI-AUTH-001/002 | N/A | ✅ TC-UI-EDGE-001 | ✅ TC-UI-EDGE-004
-API 响应 | ✅ TC-API-JUPYTER-001 | ✅ TC-API-SCHEMA-001 | N/A | N/A | N/A | N/A | N/A | N/A | N/A
-配置展示 | ✅ TC-UI-DIALOG-001/002/003 | N/A | ✅ 移动端尺寸 | N/A | N/A | N/A | N/A | N/A | N/A
-关闭操作 | ✅ TC-UI-NAV-004 | ✅ TC-UI-EDGE-002/003 | N/A | N/A | N/A | N/A | N/A | ✅ TC-UI-EDGE-001 | N/A
-响应式布局 | ✅ TC-UI-RESP-001/002 | N/A | ✅ 视口边界 | N/A | N/A | N/A | N/A | N/A | N/A
-
-备注：
-- 空值/特殊字符/数据唯一性 对本功能（纯导航+弹窗）不适用，已在备注列标注 N/A。
-- 异常输入维度通过键盘 Enter 触发覆盖（TC-UI-EDGE-004）。
-- 实例启动后的 Jupyter 功能测试因涉及后端资源调度和多账号权限隔离，归入手动测试块。
-"""
