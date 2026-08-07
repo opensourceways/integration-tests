@@ -259,25 +259,3 @@ class TestAuthOptionalPositive:
         assert me.status_code == 200, f"/me 失败：{me.status_code} {me.text[:300]}"
         profile = me.json()
         assert profile.get("username") == TEST_ACCOUNT
-
-
-# ===== 用例索引（人类可贴禅道/Tapd）=====
-#
-# | 用例 ID | 标题 | 优先级 | 来源 |
-# |---------|------|--------|------|
-# | test_health_ok | health status=ok | P0 | 首版 |
-# | test_health_idempotent | health 幂等 | P1 | 首版 |
-# | test_frontend_index_html | 首页 HTML | P1 | 首版 |
-# | test_list_projects_shape | 项目列表结构 | P0 | 首版 |
-# | test_list_projects_pagination_bounds | page_size 边界 | P1 | 首版 |
-# | test_search_projects_by_q | 项目 q 搜索 | P0 | 首版 |
-# | test_get_project_detail | 项目详情 | P0 | 首版 |
-# | test_get_project_not_found | 详情 404 | P1 | 首版 |
-# | test_project_meta_options | 分类/协议选项 | P1 | 首版 |
-# | test_project_maintainers_and_orgs_readable | 子资源可读 | P1 | 首版 |
-# | test_global_search | 全局搜索 | P0 | 首版 |
-# | test_list_orgs | 组织列表 | P1 | 首版 |
-# | test_me_without_token | /me 401 | P0 | 首版 |
-# | test_login_wrong_password | 错误登录 401 | P0 | 首版 |
-# | test_export_without_token | 导出 401 | P1 | 首版 |
-# | test_login_and_me | 可选正向登录 | P1 | 首版（需 env） |

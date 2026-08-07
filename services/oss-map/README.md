@@ -1,7 +1,5 @@
 # oss-map 集成测试
 
-范式 A：`pytest` + `requests`，打**测试环境**真实服务（不是 preview）。
-
 ## 被测环境
 
 | 项 | 值 |
@@ -38,6 +36,6 @@ OSS_MAP_BASE_URL=https://oss-map.test.osinfra.cn pytest -v test_cases.py
 | 文件 | 说明 |
 |------|------|
 | `test_cases.py` | 可执行 pytest 用例 |
-| `TestStrategy.md` | 模块测试策略（交付件） |
+| `TestStrategy.md` | 模块测试策略 |
 | `requirements.txt` | 依赖 |
-| `run_all.sh` | 统一入口（供 integration-tests 探测） |
+| `run_all.sh` | 统一入口 |
