@@ -1,0 +1,23 @@
+# API 自动化测试依赖清单
+# 安装命令: pip install -r requirements.txt
+
+# 核心测试框架
+pytest>=7.4.0
+requests>=2.31.0
+
+# 报告生成
+pytest-html>=4.1.0
+pytest-metadata>=3.0.0
+
+# Allure 报告（可选）
+allure-pytest>=2.13.0
+
+# JUnit XML 支持（pytest 内置）
+# 无需额外安装
+
+# 并行执行（可选）
+pytest-xdist>=3.3.0
+
+# 代码质量（可选，开发时使用）
+flake8>=6.1.0
+black>=23.0.0
