@@ -1,0 +1,72 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.8, pytest-9.1.1, pluggy-1.5.0 -- D:\software\python\python.exe
+cachedir: .pytest_cache
+metadata: {'Python': '3.10.8', 'Platform': 'Windows-10-10.0.17763-SP0', 'Packages': {'pytest': '9.1.1', 'pluggy': '1.5.0'}, 'Plugins': {'allure-pytest': '2.16.0', 'anyio': '3.7.1', 'asyncio': '0.21.2', 'base-url': '2.1.0', 'cov': '7.1.0', 'html': '4.1.1', 'json-report': '1.5.0', 'metadata': '3.1.1', 'playwright': '0.7.2', 'rerunfailures': '16.4', 'xdist': '3.8.0', 'requests-mock': '1.12.1'}, 'Base URL': ''}
+rootdir: D:\gxz\ai_gxz\search\hifloat
+plugins: allure-pytest-2.16.0, anyio-3.7.1, asyncio-0.21.2, base-url-2.1.0, cov-7.1.0, html-4.1.1, json-report-1.5.0, metadata-3.1.1, playwright-0.7.2, rerunfailures-16.4, xdist-3.8.0, requests-mock-1.12.1
+asyncio: mode=strict
+collecting ... collected 15 items
+
+test_cases.py::TestJumperAll::test_all_positive[case0] FAILED            [  6%]
+test_cases.py::TestJumperEcosystemRepoInfo::test_ecosystem_missing_type PASSED [ 13%]
+test_cases.py::TestJumperEcosystemRepoInfo::test_ecosystem_positive[case0] PASSED [ 20%]
+test_cases.py::TestJumperSigName::test_sig_name_positive[case0] FAILED   [ 26%]
+test_cases.py::TestJumperSigReadme::test_sig_readme_missing_sig PASSED   [ 33%]
+test_cases.py::TestJumperStars::test_stars_positive[case0] FAILED        [ 40%]
+test_cases.py::TestSearchCount::test_count_positive[case0] PASSED        [ 46%]
+test_cases.py::TestSearchDocs::test_docs_positive[case0] PASSED          [ 53%]
+test_cases.py::TestSearchDocs::test_docs_positive[case1] PASSED          [ 60%]
+test_cases.py::TestSearchDocs::test_docs_positive[case2] PASSED          [ 66%]
+test_cases.py::TestSearchPop::test_pop_positive[case0] PASSED            [ 73%]
+test_cases.py::TestSearchSortDocs::test_sort_docs_positive[case0] PASSED [ 80%]
+test_cases.py::TestSearchSortType::test_sort_type_positive[case0] PASSED [ 86%]
+test_cases.py::TestSearchSugg::test_sugg_positive[case0] PASSED          [ 93%]
+test_cases.py::TestSearchTags::test_tags_positive[case0] PASSED          [100%]
+
+================================== FAILURES ===================================
+E   AssertionError: 响应体为空
+    assert ''
+     +  where '' = <ApiResponse http_status=200 business_status=None>.text
+---------------------------- Captured stdout setup ----------------------------
+2026-08-11 17:24:46,150 [INFO] [request_client] [RequestClient] initialized | base_url=https://doc-search-common.test.osinfra.cn | retries=3
+----------------------------- Captured log setup ------------------------------
+INFO     request_client:request_client.py:120 [RequestClient] initialized | base_url=https://doc-search-common.test.osinfra.cn | retries=3
+---------------------------- Captured stdout call -----------------------------
+2026-08-11 17:24:46,151 [INFO] [test_cases] [JUMPER-ALL-001] 开始执行: 全部数据概览
+2026-08-11 17:24:46,151 [INFO] [request_client] [REQUEST] GET https://doc-search-common.test.osinfra.cn/search/all | params=None | headers={"Content-Type": "application/json", "Host": "doc-search-common.test.osinfra.cn", "User-Agent": "API-Automation-Test/1.0 (pytest+requests)", "Accept": "application/json", "source": "hifloat"}
+2026-08-11 17:24:46,374 [INFO] [request_client] [RESPONSE] GET https://doc-search-common.test.osinfra.cn/search/all | http_status=200 | business_status=None | latency=222.6ms | body_preview=
+------------------------------ Captured log call ------------------------------
+INFO     test_cases:test_cases.py:193 [JUMPER-ALL-001] 开始执行: 全部数据概览
+INFO     request_client:request_client.py:173 [REQUEST] GET https://doc-search-common.test.osinfra.cn/search/all | params=None | headers={"Content-Type": "application/json", "Host": "doc-search-common.test.osinfra.cn", "User-Agent": "API-Automation-Test/1.0 (pytest+requests)", "Accept": "application/json", "source": "hifloat"}
+INFO     request_client:request_client.py:199 [RESPONSE] GET https://doc-search-common.test.osinfra.cn/search/all | http_status=200 | business_status=None | latency=222.6ms | body_preview=
+D:\gxz\ai_gxz\search\hifloat\test_cases.py:198: AssertionError: 响应体为空
+E   AssertionError: 响应体为空
+    assert ''
+     +  where '' = <ApiResponse http_status=200 business_status=None>.text
+---------------------------- Captured stdout call -----------------------------
+2026-08-11 17:24:47,917 [INFO] [test_cases] [JUMPER-SIG-NAME-001] 开始执行: SIG 名称列表
+2026-08-11 17:24:47,917 [INFO] [request_client] [REQUEST] GET https://doc-search-common.test.osinfra.cn/search/sig/name | params={"lang": "zh"} | headers={"Content-Type": "application/json", "Host": "doc-search-common.test.osinfra.cn", "User-Agent": "API-Automation-Test/1.0 (pytest+requests)", "Accept": "application/json", "source": "hifloat"}
+2026-08-11 17:24:48,097 [INFO] [request_client] [RESPONSE] GET https://doc-search-common.test.osinfra.cn/search/sig/name | http_status=200 | business_status=None | latency=179.8ms | body_preview=
+------------------------------ Captured log call ------------------------------
+INFO     test_cases:test_cases.py:157 [JUMPER-SIG-NAME-001] 开始执行: SIG 名称列表
+INFO     request_client:request_client.py:173 [REQUEST] GET https://doc-search-common.test.osinfra.cn/search/sig/name | params={"lang": "zh"} | headers={"Content-Type": "application/json", "Host": "doc-search-common.test.osinfra.cn", "User-Agent": "API-Automation-Test/1.0 (pytest+requests)", "Accept": "application/json", "source": "hifloat"}
+INFO     request_client:request_client.py:199 [RESPONSE] GET https://doc-search-common.test.osinfra.cn/search/sig/name | http_status=200 | business_status=None | latency=179.8ms | body_preview=
+D:\gxz\ai_gxz\search\hifloat\test_cases.py:162: AssertionError: 响应体为空
+E   AssertionError: 响应体为空
+    assert ''
+     +  where '' = <ApiResponse http_status=200 business_status=None>.text
+---------------------------- Captured stdout call -----------------------------
+2026-08-11 17:24:49,122 [INFO] [test_cases] [JUMPER-STARS-001] 开始执行: 星标统计
+2026-08-11 17:24:49,122 [INFO] [request_client] [REQUEST] GET https://doc-search-common.test.osinfra.cn/search/stars | params=None | headers={"Content-Type": "application/json", "Host": "doc-search-common.test.osinfra.cn", "User-Agent": "API-Automation-Test/1.0 (pytest+requests)", "Accept": "application/json", "source": "hifloat"}
+2026-08-11 17:24:49,283 [INFO] [request_client] [RESPONSE] GET https://doc-search-common.test.osinfra.cn/search/stars | http_status=200 | business_status=None | latency=160.4ms | body_preview=
+------------------------------ Captured log call ------------------------------
+INFO     test_cases:test_cases.py:209 [JUMPER-STARS-001] 开始执行: 星标统计
+INFO     request_client:request_client.py:173 [REQUEST] GET https://doc-search-common.test.osinfra.cn/search/stars | params=None | headers={"Content-Type": "application/json", "Host": "doc-search-common.test.osinfra.cn", "User-Agent": "API-Automation-Test/1.0 (pytest+requests)", "Accept": "application/json", "source": "hifloat"}
+INFO     request_client:request_client.py:199 [RESPONSE] GET https://doc-search-common.test.osinfra.cn/search/stars | http_status=200 | business_status=None | latency=160.4ms | body_preview=
+D:\gxz\ai_gxz\search\hifloat\test_cases.py:214: AssertionError: 响应体为空
+--- Generated html report: file:///D:/gxz/ai_gxz/search/hifloat/report.html ---
+=========================== short test summary info ===========================
+FAILED test_cases.py::TestJumperAll::test_all_positive[case0] - AssertionErro...
+FAILED test_cases.py::TestJumperSigName::test_sig_name_positive[case0] - Asse...
+FAILED test_cases.py::TestJumperStars::test_stars_positive[case0] - Assertion...
+======================== 3 failed, 12 passed in 8.95s =========================

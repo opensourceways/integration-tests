@@ -1,0 +1,311 @@
+{
+  "_comment": "测试数据配置，可按环境/社区维度扩展",
+  "common": {
+    "valid_lang": ["zh", "en", "ZH", "EN"],
+    "invalid_lang": ["fr", "jp", "123"],
+    "valid_keywords": ["kernel", "A-Tune", "docker", "openEuler", "安装指南"],
+    "invalid_keywords": ["", "a", "select * from", "../../../etc/passwd", "测试!@#$%^&*()"],
+    "page_defaults": {
+      "page": 1,
+      "pageSize": 12
+    }
+  },
+  "search": {
+    "docs": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-DOCS-001",
+          "desc": "标准文档检索-中文",
+          "body": {
+            "lang": "zh",
+            "keyword": "kernel",
+            "page": 1,
+            "pageSize": 12
+          },
+          "expected_business_status": 200
+        },
+        {
+          "case_id": "SEARCH-DOCS-002",
+          "desc": "标准文档检索-英文",
+          "body": {
+            "lang": "en",
+            "keyword": "installation",
+            "page": 1,
+            "pageSize": 10
+          },
+          "expected_business_status": 200
+        },
+        {
+          "case_id": "SEARCH-DOCS-003",
+          "desc": "带过滤条件检索",
+          "body": {
+            "lang": "zh",
+            "keyword": "docker",
+            "page": 1,
+            "pageSize": 12,
+            "type": "docs"
+          },
+          "expected_business_status": 200
+        }
+      ],
+      "negative_cases": [
+        {
+          "case_id": "SEARCH-DOCS-101",
+          "desc": "缺少必填字段 lang",
+          "body": {
+            "keyword": "kernel"
+          },
+          "expected_http_status": 200,
+          "expected_business_status": 201
+        },
+        {
+          "case_id": "SEARCH-DOCS-102",
+          "desc": "pageSize 越界-过大",
+          "body": {
+            "lang": "zh",
+            "keyword": "test",
+            "pageSize": 999
+          },
+          "expected_http_status": 200,
+          "expected_business_status": 201
+        }
+      ]
+    },
+    "docsng": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-DOCSNG-001",
+          "desc": "多路召回搜索",
+          "body": {
+            "lang": "zh",
+            "keyword": "A-Tune 性能调优",
+            "page": 1,
+            "pageSize": 12
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "sugg": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-SUGG-001",
+          "desc": "搜索建议",
+          "body": {
+            "lang": "zh",
+            "keyword": "docker"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "count": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-COUNT-001",
+          "desc": "结果数量统计",
+          "body": {
+            "lang": "zh",
+            "keyword": "kernel"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "pop": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-POP-001",
+          "desc": "热门搜索词",
+          "params": {
+            "lang": "zh"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "tags": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-TAGS-001",
+          "desc": "标签聚合",
+          "body": {
+            "lang": "zh",
+            "want": "hot"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "word": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-WORD-001",
+          "desc": "词条查询",
+          "params": {
+            "query": "kernel"
+          },
+          "body": {
+            "lang": "zh"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "nps": {
+      "positive_cases": [
+        {
+          "case_id": "SEARCH-NPS-001",
+          "desc": "提交 NPS 反馈",
+          "params": {
+            "community": "openeuler"
+          },
+          "body": {
+            "feedbackPageUrl": "https://openeuler.org/docs",
+            "feedbackValue": 8,
+            "feedbackText": "文档搜索很好用"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    }
+  },
+  "sort": {
+    "sort_type": {
+      "positive_cases": [
+        {
+          "case_id": "SORT-TYPE-001",
+          "desc": "按分类高级搜索",
+          "path_type": "doc",
+          "body": {
+            "lang": "zh",
+            "keyword": "kernel"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "sort_docs": {
+      "positive_cases": [
+        {
+          "case_id": "SORT-DOCS-001",
+          "desc": "分类文档搜索",
+          "body": {
+            "lang": "zh",
+            "keyword": "docker",
+            "page": 1,
+            "pageSize": 10
+          },
+          "expected_business_status": 200
+        }
+      ]
+    }
+  },
+  "jumper": {
+    "sig_name": {
+      "positive_cases": [
+        {
+          "case_id": "JUMPER-SIG-NAME-001",
+          "desc": "SIG 名称列表",
+          "params": {
+            "lang": "zh"
+          },
+          "expected_http_status": 200
+        }
+      ]
+    },
+    "sig_readme": {
+      "positive_cases": [
+        {
+          "case_id": "JUMPER-SIG-README-001",
+          "desc": "SIG README",
+          "params": {
+            "sig": "ai",
+            "lang": "zh"
+          },
+          "expected_http_status": 200
+        }
+      ]
+    },
+    "all": {
+      "positive_cases": [
+        {
+          "case_id": "JUMPER-ALL-001",
+          "desc": "全部数据概览",
+          "expected_http_status": 200
+        }
+      ]
+    },
+    "stars": {
+      "positive_cases": [
+        {
+          "case_id": "JUMPER-STARS-001",
+          "desc": "星标统计",
+          "expected_http_status": 200
+        }
+      ]
+    },
+    "ecosystem_repo_info": {
+      "positive_cases": [
+        {
+          "case_id": "JUMPER-ECO-001",
+          "desc": "生态仓库信息",
+          "params": {
+            "ecosystem_type": "openEuler",
+            "lang": "zh",
+            "page": 1
+          },
+          "expected_http_status": 200
+        }
+      ]
+    }
+  },
+  "software": {
+    "docs": {
+      "positive_cases": [
+        {
+          "case_id": "SW-DOCS-001",
+          "desc": "软件包搜索",
+          "body": {
+            "keyword": "nginx",
+            "dataType": "rpmpkg",
+            "pageNum": 1,
+            "pageSize": 10,
+            "arch": "x86_64"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    },
+    "count": {
+      "positive_cases": [
+        {
+          "case_id": "SW-COUNT-001",
+          "desc": "软件包数量统计",
+          "body": {
+            "keyword": "nginx",
+            "dataType": "rpmpkg"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    }
+  },
+  "sigsearch": {
+    "docs": {
+      "positive_cases": [
+        {
+          "case_id": "SIGSEARCH-DOCS-001",
+          "desc": "SIG 文档搜索",
+          "body": {
+            "keyword": "Kernel",
+            "pageNum": 1,
+            "pageSize": 10,
+            "dataType": "all"
+          },
+          "expected_business_status": 200
+        }
+      ]
+    }
+  }
+}
