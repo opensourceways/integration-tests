@@ -85,11 +85,16 @@ def get_launch_args():
 def browser():
     """启动浏览器实例（session 级别复用）"""
     with sync_playwright() as p:
-        # 使用系统已安装的 Edge 浏览器（Windows 组件，不受额外网络限制）
+        # 默认使用 Playwright 自带的 Chromium，跨平台通用
+        # 如需使用系统 Edge，可设置环境变量: PLAYWRIGHT_CHANNEL=msedge
+        channel = os.environ.get("PLAYWRIGHT_CHANNEL", None)
+        headless = os.environ.get("PLAYWRIGHT_HEADLESS", "true").lower() in ("1", "true", "yes")
+        slow_mo = int(os.environ.get("PLAYWRIGHT_SLOW_MO", "150"))
         browser = p.chromium.launch(
-            channel="msedge",         # 调用系统 Microsoft Edge
-            headless=False,           # 有头模式便于调试观察
-            slow_mo=150,
+            channel=channel,          # None 表示使用 Playwright 内置 Chromium
+            headless=headless,
+            slow_mo=slow_mo,
+            args=get_launch_args(),
         )
         yield browser
         browser.close()
@@ -613,11 +618,15 @@ class TestAnonymous:
 # =============================================================================
 if __name__ == "__main__":
     with sync_playwright() as p:
-        # 自测入口同样使用系统 Edge
+        # 自测入口同样使用 Playwright 内置 Chromium，跨平台通用
+        channel = os.environ.get("PLAYWRIGHT_CHANNEL", None)
+        headless = os.environ.get("PLAYWRIGHT_HEADLESS", "true").lower() in ("1", "true", "yes")
+        slow_mo = int(os.environ.get("PLAYWRIGHT_SLOW_MO", "200"))
         browser = p.chromium.launch(
-            channel="msedge",
-            headless=False,           # 有头模式便于调试观察
-            slow_mo=200,
+            channel=channel,
+            headless=headless,
+            slow_mo=slow_mo,
+            args=get_launch_args(),
         )
         context = browser.new_context(
             viewport={"width": 1920, "height": 1080},
