@@ -11,7 +11,7 @@ openEuler 补丁管理平台（patch-mgr-bg）接口自动化测试用例
 
 环境变量:
     BASE_URL: API 基础地址，默认 https://ospatch.test.osinfra.cn
-    AUTH_TOKEN: 认证 token，需在 .env 文件或环境变量中设置
+    TEST_OSPATCH_AUTH_TOKEN: 认证 token，需在 .env 文件或环境变量中设置
 """
 
 import os
@@ -30,10 +30,10 @@ load_dotenv()
 
 # ==================== 全局配置 ====================
 BASE_URL = os.getenv("BASE_URL", "https://ospatch.test.osinfra.cn")
-AUTH_TOKEN = os.getenv("AUTH_TOKEN")
-if not AUTH_TOKEN:
+TEST_OSPATCH_AUTH_TOKEN = os.getenv("TEST_OSPATCH_AUTH_TOKEN")
+if not TEST_OSPATCH_AUTH_TOKEN:
     raise RuntimeError(
-        "环境变量 AUTH_TOKEN 未设置。请在 .env 文件中配置 AUTH_TOKEN，"
+        "环境变量 TEST_OSPATCH_AUTH_TOKEN 未设置。请在 .env 文件中配置 TEST_OSPATCH_AUTH_TOKEN，"
         "或通过环境变量传入。"
     )
 
@@ -153,7 +153,7 @@ class PatchMgrClient:
 @pytest.fixture(scope="session")
 def client() -> PatchMgrClient:
     """全局客户端 fixture"""
-    return PatchMgrClient(token=AUTH_TOKEN)
+    return PatchMgrClient(token=TEST_OSPATCH_AUTH_TOKEN)
 
 
 @pytest.fixture(scope="session")
