@@ -1,5 +1,5 @@
 # openEuler 首页自动化测试 - Python依赖
-pytest>=8.0.0
+pytest>=9.0.3
 pytest-playwright>=0.5.0
 pytest-html>=4.1.0
 playwright>=1.40.0
