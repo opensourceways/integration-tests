@@ -1,0 +1,65 @@
+skill_name: api_auto_test_gen_review
+display_name: 接口自动化脚本生成与覆盖率审核
+description: 读取需求文档、设计文档、接口文档生成Python requests接口自动化脚本；对脚本做审核，强制校验接口覆盖率≥95%，不达标返回补全指令循环重生成。
+version: 1.0.0
+author: prompt‑master
+tags:
+  - 自动化测试
+  - 接口测试
+  - 脚本生成
+  - 代码审核
+inputs:
+  - name: req_doc
+    description: 需求文档完整文本
+    type: string
+    required: true
+  - name: design_doc
+    description: 设计文档完整文本
+    type: string
+    required: true
+  - name: api_doc
+    description: 接口文档完整文本
+    type: string
+    required: true
+  - name: previous_gen_result
+    description: 上一轮脚本生成输出，首轮为空字符串
+    type: string
+    required: false
+  - name: review_suggestion
+    description: 上一轮审核反馈意见，首轮为空字符串
+    type: string
+    required: false
+outputs:
+  - name: gen_output
+    description: 脚本生成输出：文档摘要+接口清单+自动化脚本+初步覆盖率统计
+    type: string
+  - name: review_output
+    description: 审核输出：总数、覆盖数、覆盖率百分比、达标结论、未覆盖接口、问题清单、处理建议
+    type: string
+  - name: is_pass
+    description: 审核是否通过，true=覆盖率≥95%；false=不通过需重新生成
+    type: boolean
+workflow:
+  sequence:
+    - step: generate_script
+      skill_ref: api_auto_script_gen
+      input_mapping:
+        req_doc: ${req_doc}
+        design_doc: ${design_doc}
+        api_doc: ${api_doc}
+        review_suggestion: ${review_suggestion}
+      output_mapping:
+        gen_output: ${gen_output}
+    - step: review_script
+      skill_ref: api_auto_script_review
+      input_mapping:
+        gen_output: ${gen_output}
+      output_mapping:
+        review_output: ${review_output}
+        is_pass: ${is_pass}
+  loop:
+    condition: ${is_pass} == false
+    re_run_step: generate_script
+    inject_input:
+      previous_gen_result: ${gen_output}
+      review_suggestion: ${review_output}
