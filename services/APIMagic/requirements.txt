@@ -1,0 +1,19 @@
+# datastat 接口自动化测试依赖
+# 安装: pip install -r requirements.txt
+#
+# 运行环境: Python 3.14.7
+# 说明: 仅列出直接依赖，传递依赖（jinja2、execnet、pytest-metadata 等）由 pip 自动解析
+
+# ---- 测试框架与 HTTP 客户端 ----
+pytest==9.1.1
+requests==2.34.2
+
+# ---- pytest 插件（均为必需，缺一不可）----
+# pytest-html      : 生成 HTML 报告，提供 --html / --self-contained-html
+pytest-html==4.2.0
+# pytest-xdist     : 并行执行，提供 -n
+pytest-xdist==3.8.0
+# pytest-base-url  : 提供 --base-url 选项（conftest.py 的 base_url fixture 依赖此选项）
+pytest-base-url==2.1.0
+# pytest-timeout   : 提供 --timeout 选项（test_cases.py 命令行入口会传入）
+pytest-timeout==2.4.0
