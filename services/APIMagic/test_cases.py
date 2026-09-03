@@ -21,13 +21,13 @@ from pathlib import Path
 import pytest
 import requests
 
-# 确保 api_tests/utils 可被导入
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api_tests"))
+# 确保同目录下的 utils 可被导入（不受运行时 cwd 影响）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import ApiParser, RequestBuilder, ResponseValidator
 
 
 # ==================== 默认配置 ====================
-DEFAULT_BASE_URL = "https://datastat2.test.osinfra.cn"
+DEFAULT_BASE_URL = "https://datastat2.test.osinfra.cn/server"
 DEFAULT_TIMEOUT = 30
 DEFAULT_API_ROOT = "api"
 
@@ -115,6 +115,8 @@ def _safe_json_loads(text):
 _SKIP_APIS = [
     # 数据入湖模块 DELETE 接口返回 502 Bad Gateway (nginx 网关错误)
     ("数据入湖", None, "DELETE"),
+    # openubmc-sig committermaintainer信息 接口返回 500
+    ("openubmc-sig", "committermaintainer信息", "GET"),
 ]
 
 
@@ -126,6 +128,31 @@ def _should_skip_api(api) -> bool:
                 continue
             if api_name and api.name != api_name:
                 continue
+            return True
+    return False
+
+
+# ==================== 按用例类型排除 ====================
+# 说明: 以下接口在指定用例类型下不生成用例
+# 格式: 测试函数名 -> [(module_name, api_name), ...]
+_EXCLUDE_BY_TEST = {
+    # 后端对必填参数有默认值兜底，不传也返回成功
+    "test_missing_required_params": [
+        ("datastat", "获取用户信息"),
+        ("datastat", "根据repo查询committer"),
+        ("datastat", "下载量"),
+        ("会议", "获取组织成员信息"),
+        ("开发者", "海外贡献者统计"),
+        ("社区下载", "hifloat看板文档下载详情"),
+        ("社区下载", "source字典"),
+    ],
+}
+
+
+def _is_excluded_for_test(api, func_name: str) -> bool:
+    """判断接口在指定用例类型下是否被排除"""
+    for module_name, api_name in _EXCLUDE_BY_TEST.get(func_name, []):
+        if api.module_name == module_name and api.name == api_name:
             return True
     return False
 
@@ -160,6 +187,19 @@ def pytest_generate_tests(metafunc):
     apis = [a for a in apis if not _should_skip_api(a)]
     if skipped:
         print(f"\n[跳过] 临时跳过 {len(skipped)} 个接口: {set(f'{a.module_name}/{a.name}[{a.method}]' for a in skipped)}")
+
+    # 反向用例在收集阶段过滤：构造不出对应场景的接口直接不生成用例
+    # （避免产生大量 skipped，报告只保留可实际执行的用例）
+    func_name = metafunc.function.__name__
+    if func_name == "test_missing_required_params":
+        # 无必填参数 -> 无法构造"缺少必填参数"场景
+        apis = [a for a in apis if a.required_params]
+    elif func_name == "test_invalid_param_format":
+        # 无 pattern/length 等校验规则 -> 无法构造"非法格式参数"场景
+        apis = [a for a in apis if a.validated_params]
+
+    # 按用例类型排除指定接口
+    apis = [a for a in apis if not _is_excluded_for_test(a, func_name)]
 
     if not apis:
         return
@@ -243,9 +283,14 @@ class TestApiPositive:
             # 非 JSON 响应
             content_type = response.headers.get("Content-Type", "")
             print(f"  [非 JSON 响应] Content-Type: {content_type}")
-            # 如果接口预期返回 JSON 但实际不是，记录警告
+            # 接口定义了 JSON responseBody 却返回非 JSON，说明请求未真正命中接口
+            # （典型场景：前端 SPA 的 catch-all 路由返回 200 + HTML，会造成"假通过"）
             if api.has_response_body or api.response_body_definition:
-                print(f"  [警告] 接口定义包含 responseBody，但实际返回非 JSON")
+                pytest.fail(
+                    f"接口定义包含 responseBody 但实际返回非 JSON "
+                    f"(Content-Type={content_type})，请求可能未命中真实接口。"
+                    f"响应片段: {response.text[:200]}"
+                )
 
     @pytest.mark.positive
     def test_optional_params(self, http_session, base_url, api, timeout):
