@@ -1,0 +1,43 @@
+# =============================================================================
+# openGauss Etherpad 前端自动化测试 —— Python 依赖清单
+#
+# 安装：
+#   pip install -r requirements.txt
+#   playwright install chromium        # 浏览器内核，pip 不负责下载
+#
+# 说明：版本号为 2026-09-09 实测通过的版本（Python 3.14.7 / Windows Server 2019）。
+#       若需放宽约束，把 == 改成 >= 即可。
+# =============================================================================
+
+# ---- 测试框架 ----
+# test_cases.py：import pytest，全部用例的组织与断言
+pytest==9.1.1
+# 生成自包含 HTML 报告（--html=report.html --self-contained-html）
+# 传递依赖 pytest-metadata 会被自动安装，无需显式声明
+pytest-html==4.2.0
+
+# ---- 浏览器自动化 ----
+# test_cases.py：from playwright.sync_api import sync_playwright, Page, BrowserContext
+# 脚本自带 browser / context / page fixture，因此**不需要** pytest-playwright 插件
+playwright==1.62.0
+
+# ---- 配置管理 ----
+# test_cases.py / email_verify.py：from dotenv import load_dotenv
+# 从 .env 读取 TEST_ACCOUNT / TEST_PASSWORD / MAIL_AUTH_CODE 等敏感配置
+python-dotenv==1.2.2
+
+# ---- 滑块验证自动破解（slider_solver.py）----
+# from PIL import Image —— 解码 DOM 中内联的 base64 底图与拼图块
+pillow==12.3.0
+# import numpy as np —— 掩膜滑动匹配、双判据 z-score 打分定位缺口
+numpy==2.5.3
+
+# =============================================================================
+# 仅用标准库、无需安装的模块（列此备查）：
+#   email_verify.py   imaplib / email / re / os / time
+#   slider_solver.py  base64 / io / math / random / re / sys / time
+#   test_cases.py     json / os / re / time
+#
+# pillow 与 numpy 缺失时 slider_solver 会自动降级为「人工拖动滑块」模式，
+# 不会报错中断，因此在纯人工值守场景下这两项可省略。
+# =============================================================================
