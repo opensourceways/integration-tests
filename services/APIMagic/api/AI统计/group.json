@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "ai-metrics-group-001",
+  "name" : "AI统计",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "ai-metrics",
+  "createTime" : 1776653603814,
+  "updateTime" : null,
+  "createBy" : null,
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

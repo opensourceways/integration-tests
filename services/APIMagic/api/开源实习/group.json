@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "9b8fc487d76946a88319e081fa47f446",
+  "name" : "开源实习",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/practice",
+  "createTime" : 1773021303171,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

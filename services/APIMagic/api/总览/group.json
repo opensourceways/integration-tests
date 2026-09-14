@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "90bfa31b9b81424e896849dc1c79271c",
+  "name" : "总览",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "totalview",
+  "createTime" : null,
+  "updateTime" : 1741853216045,
+  "createBy" : null,
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

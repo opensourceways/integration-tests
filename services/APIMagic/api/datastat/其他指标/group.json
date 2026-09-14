@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "1bf34b6e2cff4b439cda01958030aef1",
+  "name" : "其他指标",
+  "type" : "api",
+  "parentId" : "521ef640123a4ae79386e6a38b8df4ad",
+  "path" : "/metric",
+  "createTime" : 1756786689078,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

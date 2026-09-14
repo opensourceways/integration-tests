@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "268543ec55cc4a40890f6229f0450ef9",
+  "name" : "服务健康检查",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/check",
+  "createTime" : null,
+  "updateTime" : 1766735703586,
+  "createBy" : null,
+  "updateBy" : "admin",
+  "paths" : [ ],
+  "options" : [ ]
+}

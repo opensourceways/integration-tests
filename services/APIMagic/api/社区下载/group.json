@@ -1,0 +1,27 @@
+{
+
+  "properties" : { },
+
+  "id" : "a1f4ebc89bf8425eaf857ea785af1015",
+
+  "name" : "社区下载",
+
+  "type" : "api",
+
+  "parentId" : "0",
+
+  "path" : "/community/download",
+
+  "createTime" : 1742208705160,
+
+  "updateTime" : null,
+
+  "createBy" : null,
+
+  "updateBy" : null,
+
+  "paths" : [ ],
+
+  "options" : [ ]
+
+}

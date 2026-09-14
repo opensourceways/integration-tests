@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "99092d4e19b74ddeb64fd75c5b543eaa",
+  "name" : "cloc",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/cloc",
+  "createTime" : 1767691615219,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

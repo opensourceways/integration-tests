@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "2490a90728da40cc94981ac0becd0e1f",
+  "name" : "下载",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/download",
+  "createTime" : 1756814110369,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

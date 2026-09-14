@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "320a983657e04a788c165d09bd1a019a",
+  "name" : "用户贡献详情",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/user",
+  "createTime" : 1744361709637,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

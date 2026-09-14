@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "41553c4e36ac43ad80de9092de23e98d",
+  "name" : "数据总览",
+  "type" : "api",
+  "parentId" : "ddb3e4a9e305486e84a6038a770a5504",
+  "path" : "/overview",
+  "createTime" : null,
+  "updateTime" : 1757577092441,
+  "createBy" : null,
+  "updateBy" : "admin",
+  "paths" : [ ],
+  "options" : [ ]
+}

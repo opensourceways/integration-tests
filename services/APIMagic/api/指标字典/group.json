@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "709908d8728741d19dd2d28b98d0e23a",
+  "name" : "指标字典",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "dict",
+  "createTime" : 1742654590508,
+  "updateTime" : 1742971126646,
+  "createBy" : null,
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

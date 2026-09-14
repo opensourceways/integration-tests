@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "521ef640123a4ae79386e6a38b8df4ad",
+  "name" : "datastat",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/stat",
+  "createTime" : 1744886291028,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

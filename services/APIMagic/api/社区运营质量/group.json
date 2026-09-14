@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "2e2220ca1c424052ba4fa20a1e7370f8",
+  "name" : "社区运营质量",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/stats",
+  "createTime" : 1773042344054,
+  "updateTime" : 1773365297900,
+  "createBy" : "admin",
+  "updateBy" : "admin",
+  "paths" : [ ],
+  "options" : [ ]
+}

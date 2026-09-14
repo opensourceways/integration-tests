@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "bb5eadd619a64e1b8c7a29f0108c78c0",
+  "name" : "社区贡献页面",
+  "type" : "api",
+  "parentId" : "ddb3e4a9e305486e84a6038a770a5504",
+  "path" : "",
+  "createTime" : null,
+  "updateTime" : 1757577065344,
+  "createBy" : null,
+  "updateBy" : "admin",
+  "paths" : [ ],
+  "options" : [ ]
+}

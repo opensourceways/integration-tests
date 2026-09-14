@@ -1,0 +1,27 @@
+{
+
+  "properties" : { },
+
+  "id" : "0d01c50a5cf9471788deb7210f70f3fa",
+
+  "name" : "邮件发送",
+
+  "type" : "api",
+
+  "parentId" : "0",
+
+  "path" : "/email",
+
+  "createTime" : 1747297135736,
+
+  "updateTime" : null,
+
+  "createBy" : "admin",
+
+  "updateBy" : null,
+
+  "paths" : [ ],
+
+  "options" : [ ]
+
+}

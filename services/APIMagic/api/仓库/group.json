@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "3d75a6c492184d51afba938d34338c98",
+  "name" : "仓库",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/repo",
+  "createTime" : 1742192795727,
+  "updateTime" : null,
+  "createBy" : null,
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

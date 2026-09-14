@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "a513b1f12b714736abc308a60d73a9e6",
+  "name" : "SIG贡献页面",
+  "type" : "api",
+  "parentId" : "521ef640123a4ae79386e6a38b8df4ad",
+  "path" : null,
+  "createTime" : 1745305455059,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

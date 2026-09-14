@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "b5afacecc6d04e3799ee923b67f74047",
+  "name" : "sig信息",
+  "type" : "api",
+  "parentId" : "521ef640123a4ae79386e6a38b8df4ad",
+  "path" : null,
+  "createTime" : 1761203399892,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

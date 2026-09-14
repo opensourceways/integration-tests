@@ -1,0 +1,73 @@
+{
+  "properties" : { },
+  "id" : "919c4d8866814157add117bfb0ea45f7",
+  "script" : null,
+  "groupId" : "268543ec55cc4a40890f6229f0450ef9",
+  "name" : "权限",
+  "createTime" : null,
+  "updateTime" : 1775618653911,
+  "lock" : null,
+  "createBy" : null,
+  "updateBy" : "admin",
+  "path" : "/permission",
+  "method" : "GET",
+  "parameters" : [ {
+    "name" : "community",
+    "value" : "openubmc",
+    "description" : null,
+    "required" : true,
+    "dataType" : "String",
+    "type" : null,
+    "defaultValue" : null,
+    "validateType" : null,
+    "error" : null,
+    "expression" : null,
+    "children" : null
+  } ],
+  "options" : [ {
+    "name" : "wrap_request_parameter",
+    "value" : "disable-cache",
+    "description" : "包装请求参数到一个变量中",
+    "required" : false,
+    "dataType" : "String",
+    "type" : null,
+    "defaultValue" : null,
+    "validateType" : null,
+    "error" : null,
+    "expression" : null,
+    "children" : null
+  }, {
+    "name" : "permission",
+    "value" : "datastat,mcp",
+    "description" : "允许拥有该权限的访问",
+    "required" : false,
+    "dataType" : "String",
+    "type" : null,
+    "defaultValue" : null,
+    "validateType" : null,
+    "error" : null,
+    "expression" : null,
+    "children" : null
+  } ],
+  "requestBody" : "",
+  "headers" : [ {
+    "name" : "api-token",
+    "value" : "",
+    "description" : null,
+    "required" : false,
+    "dataType" : "String",
+    "type" : null,
+    "defaultValue" : null,
+    "validateType" : null,
+    "error" : null,
+    "expression" : null,
+    "children" : null
+  } ],
+  "paths" : [ ],
+  "responseBody" : "{\n    \"code\": 1,\n    \"message\": \"success\",\n    \"data\": \"ok\",\n    \"timestamp\": 1775618636522,\n    \"executeTime\": 1\n}",
+  "description" : null,
+  "requestBodyDefinition" : null,
+  "responseBodyDefinition" : null
+}
+================================
+return "ok"

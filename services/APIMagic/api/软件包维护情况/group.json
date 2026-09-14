@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "24e4ef78cdc04b758533330015c64bf1",
+  "name" : "软件包维护情况",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/package",
+  "createTime" : 1750239961441,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

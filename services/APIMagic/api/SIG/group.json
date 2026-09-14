@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "1cc0849322d74468ab73c9ad0f14fc02",
+  "name" : "SIG",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "sig",
+  "createTime" : null,
+  "updateTime" : 1742192539939,
+  "createBy" : null,
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "3a27e930d2934b3e99edef7ee1dee30a",
+  "name" : "开发者页面",
+  "type" : "api",
+  "parentId" : "ddb3e4a9e305486e84a6038a770a5504",
+  "path" : "",
+  "createTime" : null,
+  "updateTime" : 1757577026530,
+  "createBy" : null,
+  "updateBy" : "admin",
+  "paths" : [ ],
+  "options" : [ ]
+}

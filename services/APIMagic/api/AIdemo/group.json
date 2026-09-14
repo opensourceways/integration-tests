@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "002c23f975f9400cad36e8565f54be47",
+  "name" : "AIdemo",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/api-gpt",
+  "createTime" : null,
+  "updateTime" : 1743498036414,
+  "createBy" : null,
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

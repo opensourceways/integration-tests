@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "9af308d96b55470faeda3c9b3357f836",
+  "name" : "会议",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/meeting",
+  "createTime" : 1774355196737,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

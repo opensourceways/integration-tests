@@ -1,0 +1,27 @@
+{
+
+  "properties" : { },
+
+  "id" : "fee87ad3dfde4e33b4dd4bc0eb95ce14",
+
+  "name" : "服务看板",
+
+  "type" : "api",
+
+  "parentId" : "0",
+
+  "path" : "/service",
+
+  "createTime" : null,
+
+  "updateTime" : 1743248896447,
+
+  "createBy" : null,
+
+  "updateBy" : null,
+
+  "paths" : [ ],
+
+  "options" : [ ]
+
+}

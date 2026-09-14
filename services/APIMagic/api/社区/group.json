@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "10e2710a382e42ef81f33c984351995e",
+  "name" : "社区",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/community",
+  "createTime" : 1745805493559,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}

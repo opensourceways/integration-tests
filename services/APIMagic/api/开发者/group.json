@@ -1,0 +1,27 @@
+{
+
+  "properties" : { },
+
+  "id" : "905e0bee16764ec9be1e96b78cae9466",
+
+  "name" : "开发者",
+
+  "type" : "api",
+
+  "parentId" : "0",
+
+  "path" : "user",
+
+  "createTime" : 1741832304824,
+
+  "updateTime" : null,
+
+  "createBy" : null,
+
+  "updateBy" : null,
+
+  "paths" : [ ],
+
+  "options" : [ ]
+
+}

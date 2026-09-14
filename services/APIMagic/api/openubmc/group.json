@@ -1,0 +1,14 @@
+{
+  "properties" : { },
+  "id" : "5eed1b66d5ab454f80312cee5f30f81e",
+  "name" : "openubmc",
+  "type" : "api",
+  "parentId" : "0",
+  "path" : "/openubmc",
+  "createTime" : 1751009450242,
+  "updateTime" : null,
+  "createBy" : "admin",
+  "updateBy" : null,
+  "paths" : [ ],
+  "options" : [ ]
+}
