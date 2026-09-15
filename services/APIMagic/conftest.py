@@ -6,13 +6,7 @@ pytest 共享 fixtures 与命令行选项
 - --timeout  由 pytest-timeout 插件提供
 这里只注册本项目独有的选项，避免重复注册冲突。
 """
-import os
-import sys
-
 import pytest
-
-# 将项目根目录加入路径，确保同目录下的 utils 可被导入
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 DEFAULT_BASE_URL = "https://datastat2.test.osinfra.cn/server"
 
@@ -20,8 +14,9 @@ DEFAULT_BASE_URL = "https://datastat2.test.osinfra.cn/server"
 def pytest_addoption(parser):
     """注册本项目独有的命令行选项"""
     parser.addoption("--auth-token", default="", help="认证 Token")
-    parser.addoption("--module", default="", help="指定测试模块")
-    parser.addoption("--api-root", default="api", help="API 定义根目录")
+    parser.addoption("--module", default="", help="指定测试模块（如 datastat, TTFHW）")
+    parser.addoption("--run-unauthorized", action="store_true",
+                     help="强制执行需鉴权的用例（默认在未提供凭证时跳过）")
 
 
 def pytest_configure(config):
