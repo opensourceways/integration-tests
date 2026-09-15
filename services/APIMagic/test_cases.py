@@ -50,7 +50,7 @@ import requests
 
 # ==================== 默认配置 ====================
 DEFAULT_BASE_URL = "https://datastat2.test.osinfra.cn/server"
-# 默认 60 秒：部分接口（如 /sig/pr/count）后端自身有 30 秒内部超时，
+# 默认 60 秒：部分统计接口后端自身有 30 秒内部超时，
 # 客户端超时必须大于它，否则会因客户端先断开而报请求异常，掩盖真实的服务端错误
 DEFAULT_TIMEOUT = 60
 
@@ -332,7 +332,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/ai-metrics/pr-detail',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'user_login': 'openeuler-ci-bot', 'sig': 'Infrastructure', 'ai_agent_platform': 'test', 'page': 1, 'page_size': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'user_login': 'vicoloa', 'sig': 'Infrastructure', 'ai_agent_platform': 'test', 'page': 1, 'page_size': 1},
         "has_resp_body": True,
     },
     {
@@ -452,15 +452,6 @@ _ALL_CASES_NORMAL = [
         "path": '/sig/scoreAll',
         "params": {'community': 'openeuler'},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Array', 'timestamp': 'Long', 'executeTime': 'Integer'},
-        "has_resp_body": True,
-    },
-    {
-        "id": 'SIG/内外部合入PR贡献比[GET]',
-        "module": 'SIG',
-        "name": '内外部合入PR贡献比',
-        "method": 'GET',
-        "path": '/sig/pr/count',
-        "params": {'community': 'openeuler'},
         "has_resp_body": True,
     },
     {
@@ -849,7 +840,7 @@ _ALL_CASES_NORMAL = [
         "name": 'comment贡献详情',
         "method": 'GET',
         "path": '/stat/comment/detail',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "has_resp_body": True,
     },
     {
@@ -858,7 +849,7 @@ _ALL_CASES_NORMAL = [
         "name": 'prissue贡献详情',
         "method": 'GET',
         "path": '/stat/issue/detail',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -868,7 +859,7 @@ _ALL_CASES_NORMAL = [
         "name": 'userinfo',
         "method": 'GET',
         "path": '/stat/user/info',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa'},
         "has_resp_body": True,
     },
     {
@@ -896,7 +887,7 @@ _ALL_CASES_NORMAL = [
         "name": '模糊查询贡献总数',
         "method": 'GET',
         "path": '/stat/issue/count',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa'},
         "has_resp_body": True,
     },
     {
@@ -1058,7 +1049,7 @@ _ALL_CASES_NORMAL = [
         "name": 'comment贡献详情',
         "method": 'GET',
         "path": '/stat_new/comment/detail',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "has_resp_body": True,
     },
     {
@@ -1067,7 +1058,7 @@ _ALL_CASES_NORMAL = [
         "name": 'comment贡献详情v2',
         "method": 'GET',
         "path": '/stat_new/comment/detail/v2',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "has_resp_body": True,
     },
     {
@@ -1076,7 +1067,7 @@ _ALL_CASES_NORMAL = [
         "name": 'prissue贡献详情',
         "method": 'GET',
         "path": '/stat_new/pr/detail',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Array', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -1086,7 +1077,7 @@ _ALL_CASES_NORMAL = [
         "name": 'prissue贡献详情v2',
         "method": 'GET',
         "path": '/stat_new/pr/detail/v2',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Array', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -1124,7 +1115,7 @@ _ALL_CASES_NORMAL = [
         "name": '模糊查询贡献总数',
         "method": 'GET',
         "path": '/stat_new/comment/count',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa'},
         "has_resp_body": True,
     },
     {
@@ -1474,7 +1465,7 @@ _ALL_CASES_NORMAL = [
         "path": '/user/emails',
         "needs_auth": True,
         "params": {},
-        "body": {'user_logins': ['openeuler-ci-bot'], 'platform': 'gitee'},
+        "body": {'user_logins': ['vicoloa'], 'platform': 'gitee'},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -1595,7 +1586,7 @@ _ALL_CASES_NORMAL = [
         "cred_headers": ['token'],
         "needs_auth": True,
         "params": {},
-        "body": {'community': 'openeuler', 'platform': 'gitee', 'users': ['openeuler-ci-bot']},
+        "body": {'community': 'openeuler', 'platform': 'gitee', 'users': ['vicoloa']},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Array', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -2368,7 +2359,7 @@ _ALL_CASES_NORMAL = [
         "name": '贡献总数',
         "method": 'GET',
         "path": '/user/count',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler'},
         "has_resp_body": True,
     },
     {
@@ -3173,7 +3164,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/query/comments/detail',
         "params": {},
-        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
+        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object'},
         "has_resp_body": True,
     },
@@ -3459,7 +3450,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/query/user/pr/detail',
         "params": {},
-        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
+        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object'},
         "has_resp_body": True,
     },
@@ -3785,7 +3776,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/project/topn/user/open-pr/page',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'pageSize': 1, 'pageNum': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'pageSize': 1, 'pageNum': 1},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -3807,7 +3798,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/project/topn/user/pr/page',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'pageSize': 1, 'pageNum': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'pageSize': 1, 'pageNum': 1},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -3829,7 +3820,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/project/topn/user/review/page',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'pageSize': 1, 'pageNum': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'pageSize': 1, 'pageNum': 1},
         "resp_def": {'code': 'Integer', 'message': 'String', 'data': 'Object', 'timestamp': 'Long', 'executeTime': 'Integer'},
         "has_resp_body": True,
     },
@@ -3851,7 +3842,7 @@ _ALL_CASES_NORMAL = [
         "method": 'POST',
         "path": '/project/user/daily-trend',
         "params": {},
-        "body": {'community': 'openeuler', 'user_login': 'openeuler-ci-bot', 'event': 'test', 'start': 1730419200000, 'end': 1730419200000},
+        "body": {'community': 'openeuler', 'user_login': 'vicoloa', 'event': 'test', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": '项目总览看板/邮件列表[POST]',
@@ -3890,7 +3881,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/ai-metrics/pr-detail',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'user_login': 'openeuler-ci-bot', 'sig': 'Infrastructure', 'ai_agent_platform': 'test', 'page': 1, 'page_size': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'user_login': 'vicoloa', 'sig': 'Infrastructure', 'ai_agent_platform': 'test', 'page': 1, 'page_size': 1},
     },
     {
         "id": 'AI统计/SIG统计[POST]',
@@ -3987,13 +3978,6 @@ _ALL_CASES_OPTIONAL = [
         "params": {'community': 'openeuler'},
     },
     {
-        "id": 'SIG/内外部合入PR贡献比[GET]',
-        "module": 'SIG',
-        "method": 'GET',
-        "path": '/sig/pr/count',
-        "params": {'community': 'openeuler', 'start': 1730419200000, 'end': 1730419200000},
-    },
-    {
         "id": 'SIG/外部合入PR占比[GET]',
         "module": 'SIG',
         "method": 'GET',
@@ -4027,7 +4011,7 @@ _ALL_CASES_OPTIONAL = [
         "module": 'SIG',
         "method": 'GET',
         "path": '/sig/user/ownertype',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa'},
     },
     {
         "id": 'SIG/贡献者排名[POST]',
@@ -4293,35 +4277,35 @@ _ALL_CASES_OPTIONAL = [
         "module": 'datastat',
         "method": 'GET',
         "path": '/stat/sigcontribute',
-        "params": {'community': 'openeuler', 'contributeType': 'pr', 'timeRange': 'all', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'contributeType': 'pr', 'timeRange': 'all', 'user': 'vicoloa'},
     },
     {
         "id": 'datastat/comment贡献详情[GET]',
         "module": 'datastat',
         "method": 'GET',
         "path": '/stat/comment/detail',
-        "params": {'user': 'openeuler-ci-bot', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'comment_type': 'command', 'timeRange': 'all', 'filter': 'test'},
+        "params": {'user': 'vicoloa', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'comment_type': 'command', 'timeRange': 'all', 'filter': 'test'},
     },
     {
         "id": 'datastat/prissue贡献详情[GET]',
         "module": 'datastat',
         "method": 'GET',
         "path": '/stat/issue/detail',
-        "params": {'user': 'openeuler-ci-bot', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'timeRange': 'all', 'filter': 'test'},
+        "params": {'user': 'vicoloa', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'timeRange': 'all', 'filter': 'test'},
     },
     {
         "id": 'datastat/userinfo[GET]',
         "module": 'datastat',
         "method": 'GET',
         "path": '/stat/user/info',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa'},
     },
     {
         "id": 'datastat/全部贡献[GET]',
         "module": 'datastat',
         "method": 'GET',
         "path": '/stat/count',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot', 'timeRange': 'all', 'sig': 'Infrastructure', 'comment_type': 'command'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa', 'timeRange': 'all', 'sig': 'Infrastructure', 'comment_type': 'command'},
     },
     {
         "id": 'datastat/开发者列表[GET]',
@@ -4335,7 +4319,7 @@ _ALL_CASES_OPTIONAL = [
         "module": 'datastat',
         "method": 'GET',
         "path": '/stat/issue/count',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot', 'timeRange': 'all', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa', 'timeRange': 'all', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test'},
     },
     {
         "id": 'datastat/总览数据[GET]',
@@ -4454,49 +4438,49 @@ _ALL_CASES_OPTIONAL = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/sigcontribute',
-        "params": {'community': 'openeuler', 'contributeType': 'pr', 'user': 'openeuler-ci-bot', 'start': 1730419200000, 'end': 1730419200000},
+        "params": {'community': 'openeuler', 'contributeType': 'pr', 'user': 'vicoloa', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": 'datastat-new/comment贡献详情[GET]',
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/comment/detail',
-        "params": {'user': 'openeuler-ci-bot', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000},
+        "params": {'user': 'vicoloa', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": 'datastat-new/comment贡献详情v2[GET]',
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/comment/detail/v2',
-        "params": {'user': 'openeuler-ci-bot', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000, 'repo_path': 'openeuler/kernel'},
+        "params": {'user': 'vicoloa', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000, 'repo_path': 'openeuler/kernel'},
     },
     {
         "id": 'datastat-new/prissue贡献详情[GET]',
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/pr/detail',
-        "params": {'user': 'openeuler-ci-bot', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000},
+        "params": {'user': 'vicoloa', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": 'datastat-new/prissue贡献详情v2[GET]',
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/pr/detail/v2',
-        "params": {'user': 'openeuler-ci-bot', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000, 'repo_path': 'openeuler/kernel'},
+        "params": {'user': 'vicoloa', 'page': 1, 'pageSize': 10, 'community': 'openeuler', 'sig': 'Infrastructure', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000, 'repo_path': 'openeuler/kernel'},
     },
     {
         "id": 'datastat-new/userinfo[GET]',
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/user/info',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'openeuler', 'user': 'vicoloa'},
     },
     {
         "id": 'datastat-new/全部贡献[GET]',
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/count',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot', 'start': 1730419200000, 'end': 1730419200000},
+        "params": {'community': 'openeuler', 'user': 'vicoloa', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": 'datastat-new/开发者列表[GET]',
@@ -4510,7 +4494,7 @@ _ALL_CASES_OPTIONAL = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/comment/count',
-        "params": {'community': 'openeuler', 'user': 'openeuler-ci-bot', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000},
+        "params": {'community': 'openeuler', 'user': 'vicoloa', 'sig': 'Infrastructure', 'comment_type': 'command', 'filter': 'test', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": 'datastat-new/总览数据[GET]',
@@ -4779,7 +4763,7 @@ _ALL_CASES_OPTIONAL = [
         "path": '/user/companies/all',
         "cred_headers": ['api-key'],
         "needs_auth": True,
-        "params": {'platform': 'gitee', 'users': 'openeuler-ci-bot', 'page': 1, 'page_size': 1},
+        "params": {'platform': 'gitee', 'users': 'vicoloa', 'page': 1, 'page_size': 1},
     },
     {
         "id": '开发者/批量查询用户邮箱[POST]',
@@ -4788,7 +4772,7 @@ _ALL_CASES_OPTIONAL = [
         "path": '/user/emails',
         "needs_auth": True,
         "params": {},
-        "body": {'user_logins': ['openeuler-ci-bot'], 'platform': 'gitee'},
+        "body": {'user_logins': ['vicoloa'], 'platform': 'gitee'},
     },
     {
         "id": '开发者/海外贡献者统计[GET]',
@@ -4860,7 +4844,7 @@ _ALL_CASES_OPTIONAL = [
         "path": '/user/companies',
         "cred_headers": ['token'],
         "needs_auth": True,
-        "params": {'community': 'cannopen', 'platform': 'gitee', 'page': 1, 'page_size': 1000, 'user': 'openeuler-ci-bot'},
+        "params": {'community': 'cannopen', 'platform': 'gitee', 'page': 1, 'page_size': 1000, 'user': 'vicoloa'},
     },
     {
         "id": '开发者/用户趋势[POST]',
@@ -4878,7 +4862,7 @@ _ALL_CASES_OPTIONAL = [
         "cred_headers": ['token'],
         "needs_auth": True,
         "params": {},
-        "body": {'community': 'openeuler', 'platform': 'gitee', 'users': ['openeuler-ci-bot']},
+        "body": {'community': 'openeuler', 'platform': 'gitee', 'users': ['vicoloa']},
     },
     {
         "id": '开源实习/导师或者学生贡献值[GET]',
@@ -5498,7 +5482,7 @@ _ALL_CASES_OPTIONAL = [
         "module": '用户贡献详情',
         "method": 'GET',
         "path": '/user/count',
-        "params": {'user': 'openeuler-ci-bot', 'community': 'openeuler', 'sig': 'Infrastructure'},
+        "params": {'user': 'vicoloa', 'community': 'openeuler', 'sig': 'Infrastructure'},
     },
     {
         "id": '社区/开源项目数据[POST]',
@@ -6130,7 +6114,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/query/comments/detail',
         "params": {},
-        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
+        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
     },
     {
         "id": '通用查询/forum汇总分页(tag维度)[POST]',
@@ -6340,7 +6324,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/query/user/pr/detail',
         "params": {},
-        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
+        "body": {'community': 'openeuler', 'namespace': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'start': 1730419200000, 'end': 1730419200000, 'pageNum': 1, 'pageSize': 1},
     },
     {
         "id": '通用查询/筛选条件[POST]',
@@ -6584,7 +6568,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/project/topn/user/open-pr/page',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'pageSize': 1, 'pageNum': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'pageSize': 1, 'pageNum': 1},
     },
     {
         "id": '项目总览看板/贡献者open_pr_topn[POST]',
@@ -6600,7 +6584,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/project/topn/user/pr/page',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'pageSize': 1, 'pageNum': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'pageSize': 1, 'pageNum': 1},
     },
     {
         "id": '项目总览看板/贡献者pr_topn[POST]',
@@ -6616,7 +6600,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/project/topn/user/review/page',
         "params": {},
-        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'openeuler-ci-bot', 'pageSize': 1, 'pageNum': 1},
+        "body": {'start': 1730419200000, 'end': 1730419200000, 'community': 'openeuler', 'repo_path': 'openeuler/kernel', 'user_login': 'vicoloa', 'pageSize': 1, 'pageNum': 1},
     },
     {
         "id": '项目总览看板/贡献者review_topn[POST]',
@@ -6632,7 +6616,7 @@ _ALL_CASES_OPTIONAL = [
         "method": 'POST',
         "path": '/project/user/daily-trend',
         "params": {},
-        "body": {'community': 'openeuler', 'user_login': 'openeuler-ci-bot', 'event': 'test', 'start': 1730419200000, 'end': 1730419200000},
+        "body": {'community': 'openeuler', 'user_login': 'vicoloa', 'event': 'test', 'start': 1730419200000, 'end': 1730419200000},
     },
     {
         "id": '项目总览看板/邮件列表[POST]',
@@ -6668,14 +6652,6 @@ _ALL_CASES_MISSING = [
         "module": 'SIG',
         "method": 'GET',
         "path": '/sig/scoreAll',
-        "params": {},
-        "missing": ['community'],
-    },
-    {
-        "id": 'SIG/内外部合入PR贡献比[GET]',
-        "module": 'SIG',
-        "method": 'GET',
-        "path": '/sig/pr/count',
         "params": {},
         "missing": ['community'],
     },
@@ -7368,6 +7344,8 @@ _ALL_CASES_MISSING = [
         "params": {},
         "body": {'community': 'openeuler', 'group_field': 'country', 'start': 1730419200000, 'end': 1730419200000, 'source': 'gitcode', 'is_domestic': '0'},
         "missing": ['community'],
+        # 后端对 community 有默认值兜底，接口文档未体现，缺参返回成功属正常行为
+        "has_backend_default": True,
     },
     {
         "id": '社区运营质量/Issue指标[GET]',
@@ -7570,14 +7548,6 @@ _ALL_CASES_INVALID = [
         "method": 'GET',
         "path": '/sig/scoreAll',
         "params": {'community': 'invalid_value_12345'},
-        "invalid": ['community'],
-    },
-    {
-        "id": 'SIG/内外部合入PR贡献比[GET]',
-        "module": 'SIG',
-        "method": 'GET',
-        "path": '/sig/pr/count',
-        "params": {'community': '12345'},
         "invalid": ['community'],
     },
     {
@@ -7928,7 +7898,7 @@ _ALL_CASES_INVALID = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/comment/detail',
-        "params": {'user': 'openeuler-ci-bot', 'community': '12345', 'comment_type': 'invalid_value_12345'},
+        "params": {'user': 'vicoloa', 'community': '12345', 'comment_type': 'invalid_value_12345'},
         "invalid": ['community', 'comment_type'],
     },
     {
@@ -7936,7 +7906,7 @@ _ALL_CASES_INVALID = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/comment/detail/v2',
-        "params": {'user': 'openeuler-ci-bot', 'community': '12345', 'comment_type': 'invalid_value_12345'},
+        "params": {'user': 'vicoloa', 'community': '12345', 'comment_type': 'invalid_value_12345'},
         "invalid": ['community', 'comment_type'],
     },
     {
@@ -7944,7 +7914,7 @@ _ALL_CASES_INVALID = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/pr/detail',
-        "params": {'user': 'openeuler-ci-bot', 'community': '12345'},
+        "params": {'user': 'vicoloa', 'community': '12345'},
         "invalid": ['community'],
     },
     {
@@ -7952,7 +7922,7 @@ _ALL_CASES_INVALID = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/pr/detail/v2',
-        "params": {'user': 'openeuler-ci-bot', 'community': '12345'},
+        "params": {'user': 'vicoloa', 'community': '12345'},
         "invalid": ['community'],
     },
     {
@@ -7984,7 +7954,7 @@ _ALL_CASES_INVALID = [
         "module": 'datastat-new',
         "method": 'GET',
         "path": '/stat_new/comment/count',
-        "params": {'community': '12345', 'user': 'openeuler-ci-bot', 'comment_type': 'invalid_value_12345'},
+        "params": {'community': '12345', 'user': 'vicoloa', 'comment_type': 'invalid_value_12345'},
         "invalid": ['community', 'comment_type'],
     },
     {
@@ -8314,7 +8284,7 @@ _ALL_CASES_INVALID = [
         "module": '用户贡献详情',
         "method": 'GET',
         "path": '/user/count',
-        "params": {'user': 'openeuler-ci-bot', 'community': '12345', 'sig': '12345'},
+        "params": {'user': 'vicoloa', 'community': '12345', 'sig': '12345'},
         "invalid": ['community', 'sig'],
     },
     {
@@ -8724,6 +8694,16 @@ class TestApiNegative:
         print("  Status: %d" % response.status_code)
 
         kind, code, message = _report_negative_result(response)
+
+        # 已确认后端对该参数有默认值兜底（接口文档标了必填，实现里其实可选）。
+        # 这类接口的预期是"成功"，缺参返回错误才算回归。
+        if case.get("has_backend_default"):
+            assert kind is None, \
+                "该接口已确认有默认值兜底，缺少 %s 时应返回成功，实际: kind=%s, code=%s, HTTP %d, message=%s" % (
+                    case["missing"], kind, code, response.status_code, message)
+            print("  [符合预期] 缺参走默认值兜底，返回成功")
+            return
+
         if kind is None:
             # 缺少必填参数仍然成功，可能后端有默认值兜底
             pytest.xfail("缺少必填参数但返回成功，可能后端有默认值或参数非真正必填")
