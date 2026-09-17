@@ -1,0 +1,29 @@
+---
+id: API-MR-01-007
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P1
+title: MR 冲突检测返回 conflict 状态
+intent_ref: INTENT-MR-002
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/pulls/1/merge"
+  method: GET
+  auth: token
+  expected_status: [200]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 200
+  - type: positive
+    target: api_response_body
+    json_path: "$.mergeable"
+    json_value: false
+  - type: positive
+    target: api_response_body
+    json_path: "$.mergeable_state"
+    json_value: conflict
+teardown:
+  reset: fixture

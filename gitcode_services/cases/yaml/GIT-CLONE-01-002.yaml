@@ -1,0 +1,27 @@
+---
+id: GIT-CLONE-01-002
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P0
+title: Git Clone 使用 PAT 进行 HTTPS 鉴权
+intent_ref: INTENT-GIT-001
+test_type: git
+setup:
+  repo_fixture: ComputingActionTest/bingo
+  secrets: ["PAT_TOKEN"]
+git:
+  action: clone
+  args: {"url": "https://oauth2:${PAT_TOKEN}@gitcode.com/ComputingActionTest/gitcode_api.git"}
+  local_path: ./cloned-pat-repo
+assertions:
+  - type: positive
+    target: git_exit_code
+    equals: 0
+  - type: positive
+    target: git_output
+    contains: Cloning into
+  - type: negative
+    target: git_output
+    must_not_contain: "${PAT_TOKEN}"
+teardown:
+  reset: fixture

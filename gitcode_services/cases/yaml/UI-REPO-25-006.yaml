@@ -1,0 +1,45 @@
+---
+id: UI-REPO-25-006
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 仓库 Fork 流程与 Fork 后独立导航
+intent_ref: INTENT-COMP-009
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".repository-header, [class*='header'], .repo-home"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "button:has-text('Fork'), a:has-text('Fork'), .fork-button"
+    - type: wait
+      ms: 4000
+    - type: wait_for_selector
+      selector: ".fork-form, [class*='fork'], .namespace-select"
+      timeout: 10000
+    - type: click
+      selector: "button:has-text('创建 Fork'), button:has-text('确认'), .confirm-fork"
+    - type: wait
+      ms: 8000
+assertions:
+  - type: positive
+    target: ui_url_match
+    contains: "/"
+  - type: positive
+    target: ui_element_visible
+    selector: ".repository-header, [class*='header'], .repo-home"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "Fork"
+teardown:
+  reset: none

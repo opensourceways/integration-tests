@@ -1,0 +1,52 @@
+---
+id: REL-NEEDS-02-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P0
+title: "needs 失败传播与 matrix 组合无声失败"
+intent_ref: INTENT-REL-010
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-needs-matrix
+  on:
+    workflow_dispatch:
+  jobs:
+    build:
+      name: build matrix
+      runs-on: [ubuntu-latest, x64, small]
+      strategy:
+        matrix:
+          cfg: [ok, fail]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: maybe fail
+          run: |
+            if [ "${{ matrix.cfg }}" = "fail" ]; then exit 1; fi
+            echo "ok"
+    deploy:
+      name: deploy
+      runs-on: [ubuntu-latest, x64, small]
+      needs: build
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: deploy step
+          run: |
+            echo "deploying"
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: positive
+    target: job_status
+    equals: "failed"
+  - type: negative
+    target: job_status
+    equals: "skipped"
+teardown:
+  reset: fixture

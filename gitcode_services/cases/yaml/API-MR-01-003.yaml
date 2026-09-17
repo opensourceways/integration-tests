@@ -1,0 +1,25 @@
+---
+id: API-MR-01-003
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: MR 使用 Squash 合并策略
+intent_ref: INTENT-MR-001
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/pulls/2/merge"
+  method: POST
+  params: {"merge_method": "squash", "commit_title": "Squash merge test"}
+  auth: token
+  expected_status: [200]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 200
+  - type: positive
+    target: api_response_body
+    contains: merged
+teardown:
+  reset: fixture

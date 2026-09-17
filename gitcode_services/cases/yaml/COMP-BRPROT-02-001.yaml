@@ -1,0 +1,30 @@
+id: COMP-BRPROT-02-001
+dimensions:
+- security
+- completeness
+dimension: security
+priority: P0
+title: 仓库分支保护规则设置页表单提交与规则生效
+intent_ref: INTENT-SPEC-014
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: https://gitcode.com/{owner}/{repo}/settings/branch_protection
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+  - type: wait_for_selector
+    selector: body
+    timeout: 10000
+assertions:
+- type: positive
+  target: ui_text_contains
+  selector: body
+  text: 页面找不到或无权限
+- type: positive
+  target: ui_element_visible
+  selector: body
+teardown:
+  reset: none

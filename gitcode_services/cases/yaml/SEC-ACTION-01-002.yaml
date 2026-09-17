@@ -1,0 +1,37 @@
+---
+id: SEC-ACTION-01-002
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: 本地 action 使用路径遍历引用仓库外路径应被拒绝
+intent_ref: INTENT-SEC-015
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-local-action-traversal
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: local action traversal
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: traversal action
+          uses: ./../../etc/passwd
+        - name: should not run
+          run: echo never
+assertions:
+  - type: negative
+    target: run_status
+    equals: completed
+  - type: positive
+    target: error_message
+    contains: path
+  - type: negative
+    target: run_logs
+    must_not_contain: never
+teardown:
+  reset: none

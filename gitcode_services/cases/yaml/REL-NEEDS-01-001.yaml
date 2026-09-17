@@ -1,0 +1,55 @@
+---
+id: REL-NEEDS-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P0
+title: needs 依赖的 matrix job 全成功但上游初始化 job 失败时下游不应执行
+intent_ref: INTENT-REL-005
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-needs-matrix-fail
+  on:
+    workflow_dispatch:
+  jobs:
+    init:
+      name: init job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: always fail
+          run: |
+            exit 1
+    matrix-job:
+      name: matrix job
+      runs-on: [ubuntu-latest, x64, small]
+      needs: init
+      strategy:
+        matrix:
+          val: [a, b]
+      steps:
+        - name: run matrix
+          run: |
+            echo ${{ matrix.val }}
+    downstream:
+      name: downstream job
+      runs-on: [ubuntu-latest, x64, small]
+      needs: matrix-job
+      steps:
+        - name: should not run
+          run: |
+            echo "downstream ran"
+assertions:
+  - type: positive
+    target: job_status
+    equals: failure
+  - type: positive
+    target: job_status
+    equals: skipped
+  - type: negative
+    target: run_logs
+    must_not_contain: downstream ran
+teardown:
+  reset: fixture

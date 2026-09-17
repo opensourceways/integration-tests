@@ -1,0 +1,42 @@
+---
+id: SEC-PRTARGET-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: pull_request_target 中 checkout PR 头分支后运行 build.sh 应被隔离
+intent_ref: INTENT-SEC-007
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+workflow: |
+  name: test-pr-target-build
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: checkout pr head and build
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout pr head
+          uses: checkout
+          with:
+            ref: ${{ atomgit.event.pull_request.head.ref }}
+        - name: run build script from pr
+          run: |
+            if [ -f build.sh ]; then bash build.sh; fi
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

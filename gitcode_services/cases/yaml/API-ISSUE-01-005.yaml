@@ -1,0 +1,26 @@
+---
+id: API-ISSUE-01-005
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P1
+title: "创建 Issue 评论并包含 @提及"
+intent_ref: INTENT-ISSUE-003
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/issues/6/comments"
+  method: POST
+  params: {"body": "cc @admin 请确认此问题"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.body"
+    json_value: "cc @admin 请确认此问题"
+teardown:
+  reset: fixture

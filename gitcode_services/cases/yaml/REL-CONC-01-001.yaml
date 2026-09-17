@@ -1,0 +1,36 @@
+---
+id: REL-CONC-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 短时间内高频触发同仓库 workflow 的排队与公平性
+intent_ref: INTENT-REL-002
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-concurrent-flood
+  on:
+    workflow_dispatch:
+  concurrency:
+    max: 3
+    exceed-action: QUEUE
+  jobs:
+    test:
+      name: flood job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: sleep
+          run: |
+            sleep 30
+assertions:
+  - type: positive
+    target: concurrency_isolation
+    le: 3
+  - type: nonfunctional
+    target: latency
+    le: 180
+teardown:
+  reset: none

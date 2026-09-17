@@ -1,0 +1,23 @@
+---
+id: GIT-LFS-01-001
+dimensions: ["completeness", "reliability"]
+dimension: completeness
+priority: P1
+title: Git LFS 跟踪并推送大文件
+intent_ref: INTENT-GIT-003
+test_type: git
+setup:
+  repo_fixture: ComputingActionTest/bingo
+git:
+  action: push
+  args: {"remote": "origin", "branch": "main"}
+  local_path: ./lfs-repo
+assertions:
+  - type: positive
+    target: git_exit_code
+    equals: 0
+  - type: positive
+    target: git_output
+    contains: LFS
+teardown:
+  reset: fixture

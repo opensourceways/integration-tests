@@ -1,0 +1,39 @@
+---
+id: SEC-INJ2-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "issue 评论或手动触发输入含注入 payload 时不应执行"
+intent_ref: INTENT-SEC-005
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-comment-injection
+  on:
+    issue_comment:
+      types: [created]
+  jobs:
+    test:
+      name: test comment injection
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: echo comment
+          run: |
+            echo "Comment is ${{ atomgit.event.comment.body }}"
+trigger:
+  event: issue_comment
+  as: untrusted_contributor
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: "root"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

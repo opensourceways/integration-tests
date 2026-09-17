@@ -1,0 +1,31 @@
+id: API-SMOKE-01-015
+dimensions:
+- completeness
+dimension: completeness
+priority: P1
+title: 探测 创建commit评论 端点可用性
+intent_ref: INTENT-COMP-106
+test_type: api
+setup:
+  repo_fixture: openeuler-test/gitcode_apitest
+api:
+  endpoint: /api/v5/repos/{owner}/{repo}/commits/{sha}/comments
+  method: POST
+  auth: token
+  expected_status: &id001
+  - 200
+  - 201
+  - 400
+  - 401
+  - 403
+  - 404
+  - 422
+assertions:
+- type: positive
+  target: api_status_code
+  status_codes: *id001
+- type: negative
+  target: api_response_body
+  must_not_contain: Internal Server Error
+teardown:
+  reset: fixture

@@ -1,0 +1,40 @@
+---
+id: SEC-ENV-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "向 ATOMGIT_ENV 写入换行注入内容不应污染后续环境"
+intent_ref: INTENT-SEC-006
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-env-injection
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test env injection
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: inject via env
+          run: |
+            echo "EVIL=bad\nINJECTED=1" >> $ATOMGIT_ENV
+        - name: check env
+          run: |
+            echo "EVIL=$EVIL"
+            echo "INJECTED=$INJECTED"
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: "EVIL=bad"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

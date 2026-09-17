@@ -1,0 +1,39 @@
+---
+id: SEC-CACHE-01-002
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: 不同仓库使用相同 cache key 时数据隔离
+intent_ref: INTENT-SEC-010
+test_type: workflow
+setup:
+  repo_fixture: repo-a
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-cache-key-isolation
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: cache isolation
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: save cache
+          uses: cache
+          with:
+            path: ./data
+            key: common-key-123
+        - name: write data
+          run: |
+            mkdir -p ./data
+            echo 'repo-a-data' > ./data/file.txt
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: repo-a-data
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

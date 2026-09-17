@@ -1,0 +1,27 @@
+---
+id: API-HOOK-01-001
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P1
+title: 创建 Webhook 并验证事件投递
+intent_ref: INTENT-HOOK-001
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+  secrets: ["WEBHOOK_SECRET"]
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/hooks"
+  method: POST
+  params: {"url": "https://webhook.site/unique-test-20260819", "push_events": true, "merge_requests_events": true, "password": "WEBHOOK_SECRET", "encryption_type": 1}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.url"
+    json_value: "https://webhook.site/unique-test-20260819"
+teardown:
+  reset: fixture

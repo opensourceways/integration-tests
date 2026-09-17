@@ -1,0 +1,26 @@
+---
+id: COMP-WIKI-02-001
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P2
+title: "项目 Wiki 页面的创建、编辑与 Markdown 渲染"
+intent_ref: INTENT-SPEC-034
+test_type: ui
+setup:
+  repo_fixture: null
+  secrets: []
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

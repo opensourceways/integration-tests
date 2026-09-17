@@ -1,0 +1,22 @@
+---
+id: SEC-ROLE-01-002
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: Reporter 角色不得触发 workflow_dispatch
+intent_ref: INTENT-SEC-013
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v8/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
+  method: POST
+  params: {"ref": "main"}
+  auth: token
+  expected_status: [403, 404]
+assertions:
+  - type: negative
+    target: api_status_code
+    status_codes: [403, 404]
+teardown:
+  reset: none

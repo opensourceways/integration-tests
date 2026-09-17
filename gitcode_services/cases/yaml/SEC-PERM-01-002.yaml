@@ -1,0 +1,43 @@
+---
+id: SEC-PERM-01-002
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: job 级 permissions 声明应正确限制 ATOMGIT_TOKEN 权限
+intent_ref: INTENT-SEC-012
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-job-level-perm
+  on:
+    workflow_dispatch:
+  jobs:
+    read-only:
+      name: read only job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: read repo
+          run: |
+            curl -s -H "Authorization: Bearer $ATOMGIT_TOKEN" https://api.gitcode.com/api/v5/repos/{owner}/{repo} | head -c 100
+    write-job:
+      name: write job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: write issue
+          run: |
+            curl -s -X POST -H "Authorization: Bearer $ATOMGIT_TOKEN" -d '{"title":"test"}' https://api.gitcode.com/api/v5/repos/{owner}/{repo}/issues | head -c 100
+assertions:
+  - type: positive
+    target: run_logs
+    contains: '403'
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: negative
+    target: run_logs
+    must_not_contain: '201'
+teardown:
+  reset: fixture

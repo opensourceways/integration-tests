@@ -1,0 +1,39 @@
+---
+id: USE-GITHUB-02-001
+dimensions: ["usability", "compatibility"]
+dimension: usability
+priority: P0
+title: "使用 GitHub 专有语法时的报错信息质量"
+intent_ref: INTENT-USE-020
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-github-syntax
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test github syntax
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout github style
+          uses: actions/checkout@v4
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_status
+    equals: "completed"
+  - type: positive
+    target: run_logs
+    contains: "actions/checkout@v4"
+  - type: nonfunctional
+    target: error_message
+    eval: "llm_assisted"
+    rubric: "报错信息应指明 GitCode 不支持 actions/checkout@v4，建议使用 checkout"
+teardown:
+  reset: fixture

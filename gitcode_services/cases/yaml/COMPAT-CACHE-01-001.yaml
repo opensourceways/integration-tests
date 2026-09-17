@@ -1,0 +1,44 @@
+---
+id: COMPAT-CACHE-01-001
+dimensions: ["compatibility", "security"]
+dimension: compatibility
+priority: P1
+title: fork PR 写入的 cache 不得被目标仓库主分支读取
+intent_ref: INTENT-COMPAT-025
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["CACHE_KEY"]
+trigger:
+  event: fork_pr
+  as: untrusted_contributor
+workflow: |
+  name: test-fork-cache-isolation
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: write cache from fork
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: save cache
+          uses: cache
+          with:
+            path: ./fork-data
+            key: fork-pr-cache-${{ atomgit.run_id }}
+        - name: write fork data
+          run: |
+            mkdir -p ./fork-data
+            echo "fork-secret" > ./fork-data/secret.txt
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: fork-secret
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

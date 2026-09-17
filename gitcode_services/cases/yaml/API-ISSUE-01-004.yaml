@@ -1,0 +1,26 @@
+---
+id: API-ISSUE-01-004
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 创建里程碑并关联到 Issue
+intent_ref: INTENT-ISSUE-002
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/milestones"
+  method: POST
+  params: {"title": "v2.0.0", "due_on": "2026-12-31"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.title"
+    json_value: v2.0.0
+teardown:
+  reset: fixture

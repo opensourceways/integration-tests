@@ -1,0 +1,35 @@
+---
+id: REL-ENV-02-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P2
+title: "超大 step 输出环境变量 — ATOMGIT_ENV 写入 10 MB 内容"
+intent_ref: INTENT-REL-025
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-run
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: run test
+          run: |
+            echo "done"
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

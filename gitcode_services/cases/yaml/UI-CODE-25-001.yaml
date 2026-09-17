@@ -1,0 +1,38 @@
+---
+id: UI-CODE-25-001
+dimensions: ["usability"]
+dimension: usability
+priority: P2
+title: 代码查看页行内评论与锚点分享体验
+intent_ref: INTENT-USE-011
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/blob/main/README.md"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".blob-content, [class*='content'], .file-content"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: ".line-num:visible, [class*='line-number']:visible"
+    - type: wait
+      ms: 2000
+    - type: navigate
+      url: "https://gitcode.com/{owner}/{repo}/blob/main/README.md#L1"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_url_match
+    contains: "#L"
+  - type: positive
+    target: ui_element_visible
+    selector: ".blob-content, [class*='content'], .file-content"
+teardown:
+  reset: none

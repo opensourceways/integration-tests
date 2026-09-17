@@ -1,0 +1,42 @@
+---
+id: COMPAT-PRTARGET-01-001
+dimensions: ["compatibility", "security"]
+dimension: compatibility
+priority: P0
+title: pull_request_target 默认 checkout 目标仓库 base 分支代码
+intent_ref: INTENT-COMPAT-024
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+workflow: |
+  name: test-pr-target-checkout
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: verify checkout source
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: check remote origin
+          run: |
+            git remote -v
+            echo "HEAD sha is ${{ atomgit.sha }}"
+assertions:
+  - type: positive
+    target: run_logs
+    contains: "origin  https://gitcode.com/target-owner/target-repo.git"
+  - type: negative
+    target: run_logs
+    must_not_contain: fork-owner
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

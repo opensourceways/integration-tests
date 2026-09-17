@@ -1,0 +1,24 @@
+---
+id: API-BOARD-01-002
+dimensions: [completeness]
+dimension: completeness
+priority: P2
+title: 探测 Issues 列表 API 是否返回项目/看板字段
+intent_ref: INTENT-ISSUE-006
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/issues"
+  method: GET
+  params: {"state": "open", "per_page": 1}
+  auth: token
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 200
+  - type: positive
+    target: api_response_body
+    contains: "number"
+teardown:
+  reset: none

@@ -1,0 +1,39 @@
+---
+id: SEC-PERM-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "未声明 permissions 时 fork PR 的 ATOMGIT_TOKEN 默认不应获得写权限"
+intent_ref: INTENT-SEC-011
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: []
+workflow: |
+  name: test-default-perm
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: test default permission
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: try write with token
+          run: |
+            curl -H "Authorization: token $ATOMGIT_TOKEN" -X POST https://api.gitcode.com/api/v5/repos/${{ atomgit.repository }}/issues -d '{"title":"test"}'
+trigger:
+  event: fork_pr
+  as: untrusted_contributor
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: "created"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

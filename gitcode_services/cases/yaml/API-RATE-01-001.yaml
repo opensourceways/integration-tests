@@ -1,0 +1,24 @@
+---
+id: API-RATE-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 高频触发下 API 正确返回 429 与 Retry-After
+intent_ref: INTENT-REL-018
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}"
+  method: GET
+  auth: token
+  expected_status: [429]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 429
+  - type: positive
+    target: api_response_header
+    contains: Retry-After
+teardown:
+  reset: none

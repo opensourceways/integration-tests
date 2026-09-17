@@ -1,0 +1,42 @@
+---
+id: UI-MR-25-001
+dimensions: ["usability"]
+dimension: usability
+priority: P0
+title: Merge Request 创建时分支选择与差异预览可用性
+intent_ref: INTENT-USE-003
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/compare/main...test-branch"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".compare-diff, [class*='diff'], .merge-request-form"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+    - type: wait_for_selector
+      selector: "button:has-text('新建Pull Request'), button:has-text('创建 MR')"
+      timeout: 10000
+    - type: click
+      selector: "button:has-text('新建Pull Request'), button:has-text('创建 MR')"
+    - type: wait
+      ms: 4000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "main"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "test-branch"
+  - type: positive
+    target: ui_element_visible
+    selector: ".compare-diff, [class*='diff'], .file-changes"
+teardown:
+  reset: none

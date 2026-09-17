@@ -1,0 +1,39 @@
+---
+id: UI-USER-25-001
+dimensions: ["usability"]
+dimension: usability
+priority: P1
+title: 用户工作台通知中心读取与批量操作
+intent_ref: INTENT-USE-008
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/dashboard/notifications"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".notification-list, [class*='notification'], .notifications"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: "button:has-text('标记已读'), a:has-text('标记已读'), .mark-read"
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: "button:has-text('全部已读'), a:has-text('全部已读'), .mark-all-read"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: ".notification-list, [class*='notification'], .notifications"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "通知"
+teardown:
+  reset: none

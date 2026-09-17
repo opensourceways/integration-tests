@@ -1,0 +1,14 @@
+# 凭证
+.env
+
+# 单次执行的运行结果/报告（本地产物，不入库）
+phase02/runs/
+phase02/reports/
+phase02/.cache/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 用例执行残留的日志
+*.log.txt

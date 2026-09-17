@@ -1,0 +1,37 @@
+---
+id: UI-REPO-25-005
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 仓库成员管理页面邀请与列表
+intent_ref: INTENT-COMP-007
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/project_members"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".member-list, [class*='member'], .project-members"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "button:has-text('邀请'), button:has-text('添加'), .invite-member"
+    - type: wait
+      ms: 3000
+    - type: wait_for_selector
+      selector: "input:visible, [class*='search'] input, .invite-form"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: ".member-list, [class*='member'], .project-members"
+  - type: positive
+    target: ui_element_visible
+    selector: "input:visible, [class*='search'] input, .invite-form"
+teardown:
+  reset: none

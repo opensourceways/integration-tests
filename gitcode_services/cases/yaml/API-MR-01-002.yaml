@@ -1,0 +1,26 @@
+---
+id: API-MR-01-002
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: 创建 MR 并验证状态机流转
+intent_ref: INTENT-MR-001
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/pulls"
+  method: POST
+  params: {"title": "feat: add feature", "head": "feat-create-mr", "base": "main", "body": "Test MR"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.state"
+    json_value: opened
+teardown:
+  reset: fixture

@@ -1,0 +1,30 @@
+id: SEC-RUNNER-02-001
+dimensions:
+- security
+dimension: security
+priority: P0
+title: 自托管 Runner 注册 token 不应在配置界面或日志中明文展示
+intent_ref: INTENT-SEC-020
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: https://gitcode.com/{owner}/{repo}/settings/runners
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+  - type: wait_for_selector
+    selector: body
+    timeout: 10000
+assertions:
+- type: positive
+  target: ui_text_contains
+  selector: body
+  text: 页面找不到或无权限
+- type: negative
+  target: ui_text_contains
+  selector: body
+  text: ABCDEFG123456789
+teardown:
+  reset: none

@@ -1,0 +1,39 @@
+---
+id: UI-MR-25-003
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: Merge Request 关闭与重新打开状态流转
+intent_ref: INTENT-COMP-004
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/pull/1"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".merge-request-state, [class*='state'], .mr-status"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "button:has-text('关闭'), button:has-text('Close')"
+    - type: wait
+      ms: 5000
+    - type: click
+      selector: "button:has-text('重新打开'), button:has-text('Reopen')"
+    - type: wait
+      ms: 5000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "开放"
+  - type: positive
+    target: ui_element_visible
+    selector: ".merge-request-state, [class*='state'], .mr-status"
+teardown:
+  reset: none

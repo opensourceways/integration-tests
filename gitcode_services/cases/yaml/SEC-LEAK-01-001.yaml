@@ -1,0 +1,39 @@
+---
+id: SEC-LEAK-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: secret 值不得通过 artifact 文件外泄
+intent_ref: INTENT-SEC-003
+test_type: workflow
+setup:
+  repo_fixture: with-secrets
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-secret-in-artifact
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: secret artifact leak test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: write secret to file
+          run: |
+            echo '${{ secrets.DEPLOY_TOKEN }}' > secret.txt
+        - name: upload artifact
+          uses: upload-artifact
+          with:
+            name: leaked-artifact
+            path: secret.txt
+assertions:
+  - type: negative
+    target: side_effect
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

@@ -1,0 +1,39 @@
+---
+id: SEC-PERM2-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "job 级 permissions 显式声明后仍继承顶层写权限"
+intent_ref: INTENT-SEC-012
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-perm-inherit
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test perm inheritance
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: try write
+          run: |
+            echo "trying write"
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_status
+    equals: "rejected_or_failed"
+  - type: nonfunctional
+    target: error_message
+    eval: "llm_assisted"
+    rubric: "若平台拒绝 permissions 字段，报错应明确指出 permissions 不支持"
+teardown:
+  reset: fixture

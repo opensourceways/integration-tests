@@ -1,0 +1,31 @@
+---
+id: UI-MR-25-002
+dimensions: ["usability"]
+dimension: usability
+priority: P0
+title: Merge Request 冲突状态交互反馈
+intent_ref: INTENT-USE-004
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/pull/1"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".merge-request-state, [class*='state'], .mr-status"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "冲突"
+  - type: negative
+    target: ui_element_visible
+    selector: "button:has-text('合入'):not([disabled])"
+teardown:
+  reset: none

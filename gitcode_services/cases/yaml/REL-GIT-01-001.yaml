@@ -1,0 +1,23 @@
+---
+id: REL-GIT-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 1GB+ 仓库克隆的耗时与资源稳定性
+intent_ref: INTENT-REL-010
+test_type: git
+setup:
+  repo_fixture: large-repo-1gb
+git:
+  action: clone
+  args: {"url": "https://gitcode.com/large-org/large-repo.git"}
+  local_path: ./large-repo
+assertions:
+  - type: positive
+    target: git_exit_code
+    equals: 0
+  - type: nonfunctional
+    target: latency
+    le: 600
+teardown:
+  reset: fixture

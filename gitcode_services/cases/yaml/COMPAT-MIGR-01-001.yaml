@@ -1,0 +1,38 @@
+---
+id: COMPAT-MIGR-01-001
+dimensions: ["compatibility", "usability"]
+dimension: compatibility
+priority: P0
+title: 使用 GitHub Actions 语法时校验器报错应指明 GitCode 差异
+intent_ref: INTENT-COMPAT-028
+test_type: workflow
+setup:
+  repo_fixture:  ComputingActionTest/gitcode_api
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-migration-error
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test github syntax
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: use github action name
+          uses: actions/checkout@v4
+        - name: use github context
+          run: |
+            echo "${{ github.ref }}"
+assertions:
+  - type: negative
+    target: run_status
+    equals: completed
+  - type: positive
+    target: error_message
+    contains: checkout
+  - type: positive
+    target: error_message
+    contains: github
+teardown:
+  reset: none

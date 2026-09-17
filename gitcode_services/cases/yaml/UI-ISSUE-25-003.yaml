@@ -1,0 +1,41 @@
+---
+id: UI-ISSUE-25-003
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: Issue 详情页评论操作与核心信息渲染
+intent_ref: INTENT-COMP-001
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/issues/1"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".issue-title, [class*='title'], h1"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: wait_for_selector
+      selector: "textarea:visible, [class*='comment'] textarea, .comment-form textarea"
+      timeout: 10000
+    - type: type
+      selector: "textarea:visible, [class*='comment'] textarea, .comment-form textarea"
+      value: "UI 自动化测试评论"
+    - type: click
+      selector: "button:has-text('评论'), button:has-text('提交')"
+    - type: wait
+      ms: 5000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "UI 自动化测试评论"
+  - type: positive
+    target: ui_element_visible
+    selector: ".issue-title, [class*='title'], h1"
+teardown:
+  reset: none

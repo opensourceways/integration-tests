@@ -1,0 +1,39 @@
+---
+id: SEC-INJ-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "PR 标题或分支名含命令注入 payload 时不应执行"
+intent_ref: INTENT-SEC-004
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: []
+workflow: |
+  name: test-injection
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: test injection
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: echo title
+          run: |
+            echo "PR title is ${{ atomgit.event.pull_request.title }}"
+trigger:
+  event: pr
+  as: untrusted_contributor
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: "root"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

@@ -1,0 +1,38 @@
+---
+id: SEC-FORK-01-002
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "fork PR 通过 ${{ secrets }} 对象枚举不得获取 secret 名列表"
+intent_ref: INTENT-SEC-001
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["DEPLOY_TOKEN", "API_KEY"]
+trigger:
+  event: fork_pr
+  as: untrusted_contributor
+workflow: |
+  name: test-fork-secret-enumeration
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: enumerate secrets
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: try to list secrets
+          run: |
+            echo "secrets object keys"
+            env | grep -i token || true
+            env | grep -i key || true
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: DEPLOY_TOKEN
+  - type: negative
+    target: run_logs
+    must_not_contain: API_KEY
+teardown:
+  reset: fixture

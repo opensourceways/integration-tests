@@ -1,0 +1,39 @@
+---
+id: REL-FAULT-01-003
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 模拟 runner 崩溃后 job 状态迁移与重调度
+intent_ref: INTENT-REL-015
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-runner-kill
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: runner kill test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: sleep for kill window
+          run: |
+            echo start
+            sleep 120
+            echo end
+fault_injection:
+  at: mid_job
+  action: kill_runner
+  recovery_expectation: job 状态变为 failure 或 cancelled，可被 rerun
+assertions:
+  - type: positive
+    target: run_status
+    equals: failure
+  - type: positive
+    target: api_response_body
+    contains: failure
+teardown:
+  reset: fixture

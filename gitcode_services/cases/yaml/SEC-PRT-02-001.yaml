@@ -1,0 +1,39 @@
+---
+id: SEC-PRT-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "pull_request_target 下 checkout 不可信代码后 secret 不应外发"
+intent_ref: INTENT-SEC-007
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["SENDGRID_KEY"]
+workflow: |
+  name: test-prt-exfil
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: test exfil
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: try exfil
+          run: |
+            echo "key=${{ secrets.SENDGRID_KEY }}"
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: "SENDGRID_KEY"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

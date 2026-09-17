@@ -1,0 +1,41 @@
+---
+id: UI-BOARD-25-001
+dimensions: ["completeness"]
+dimension: completeness
+priority: P2
+title: 全局看板列表与卡片交互覆盖
+intent_ref: INTENT-COMP-010
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/boards"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".board, [class*='board'], .kanban"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: ".board-card:visible, [class*='card']:visible, .issue-card"
+    - type: wait
+      ms: 3000
+    - type: wait_for_selector
+      selector: ".card-detail, [class*='detail'], .issue-detail-panel"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: ".board, [class*='board'], .kanban"
+  - type: positive
+    target: ui_element_visible
+    selector: ".card-detail, [class*='detail'], .issue-detail-panel"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "看板"
+teardown:
+  reset: none

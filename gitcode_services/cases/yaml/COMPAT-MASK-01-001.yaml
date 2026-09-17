@@ -1,0 +1,40 @@
+---
+id: COMPAT-MASK-01-001
+dimensions: ["compatibility", "security"]
+dimension: compatibility
+priority: P0
+title: secret 经过 base64 拼接变形后仍应在日志中被掩码
+intent_ref: INTENT-COMPAT-023
+test_type: workflow
+setup:
+  repo_fixture: with-secrets
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-secret-bypass
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test masking bypass
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: base64 encode secret
+          run: |
+            echo "ENCODED: $(echo '${{ secrets.DEPLOY_TOKEN }}' | base64)"
+        - name: concat secret
+          run: |
+            echo "CONCAT: prefix${{ secrets.DEPLOY_TOKEN }}suffix"
+        - name: multiline secret
+          run: |
+            printf '%s\n' "${{ secrets.DEPLOY_TOKEN }}"
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

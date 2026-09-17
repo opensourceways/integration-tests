@@ -1,0 +1,26 @@
+---
+id: API-MR-01-008
+dimensions: ["usability", "compatibility"]
+dimension: usability
+priority: P1
+title: Draft MR 标题含 WIP 前缀且不可直接合并
+intent_ref: INTENT-MR-005
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/pulls"
+  method: POST
+  params: {"title": "[WIP] Draft feature", "head": "wip-branch", "base": "main"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.state"
+    json_value: opened
+teardown:
+  reset: fixture

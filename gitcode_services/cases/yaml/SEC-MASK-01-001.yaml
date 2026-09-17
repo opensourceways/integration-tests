@@ -1,0 +1,40 @@
+---
+id: SEC-MASK-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: secret 经过 JSON 转义与 URL 编码后仍应在日志中被掩码
+intent_ref: INTENT-SEC-002
+test_type: workflow
+setup:
+  repo_fixture: with-secrets
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-secret-bypass-advanced
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: advanced masking test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: json escape
+          run: |
+            echo '${{ toJson(secrets.DEPLOY_TOKEN) }}'
+        - name: url encode
+          run: |
+            python3 -c "import urllib.parse; print(urllib.parse.quote('${{ secrets.DEPLOY_TOKEN }}'))"
+        - name: split by char
+          run: |
+            echo '${{ secrets.DEPLOY_TOKEN }}' | fold -w1
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

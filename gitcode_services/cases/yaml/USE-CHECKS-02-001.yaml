@@ -1,0 +1,25 @@
+---
+id: USE-CHECKS-02-001
+dimensions: ["usability"]
+dimension: usability
+priority: P1
+title: "PR 页面 Checks 标签中流水线状态的汇总展示与可理解性"
+intent_ref: INTENT-USE-021
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

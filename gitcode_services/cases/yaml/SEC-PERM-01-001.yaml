@@ -1,0 +1,42 @@
+---
+id: SEC-PERM-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: 未声明 permissions 时 ATOMGIT_TOKEN 默认权限应只读
+intent_ref: INTENT-SEC-011
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-default-token-perm
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test token permissions
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: list repos with token
+          run: |
+            curl -s -H "Authorization: Bearer $ATOMGIT_TOKEN" https://api.gitcode.com/api/v5/user/repos | head -c 200
+        - name: try to delete repo
+          run: |
+            curl -s -X DELETE -H "Authorization: Bearer $ATOMGIT_TOKEN" https://api.gitcode.com/api/v5/repos/{owner}/{repo} | head -c 200
+assertions:
+  - type: positive
+    target: run_logs
+    contains: '200'
+  - type: positive
+    target: run_logs
+    contains: '403'
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: negative
+    target: run_logs
+    must_not_contain: '204'
+teardown:
+  reset: fixture

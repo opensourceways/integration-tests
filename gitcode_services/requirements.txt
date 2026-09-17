@@ -1,0 +1,29 @@
+# GitCode Actions 自动化测试 — Python 依赖
+#
+# 安装（在本包目录下执行）:
+#   pip install -r requirements.txt
+#   playwright install chromium      # UI 用例必需（Docker 镜像已内置）
+
+# HTTP 客户端：API / Workflow / 日志抓取
+requests>=2.31.0,<3.0.0
+
+# YAML 解析：可执行用例契约加载
+PyYAML>=6.0.1,<7.0.0
+
+# UI 自动化：75 条 UI 用例（headless Chromium）
+playwright>=1.40.0,<2.0.0
+
+# ── 说明 ───────────────────────────────────────────────────────────
+# .env 读取由 phase02/scripts/workflow_runner.py 自带的解析器完成
+# （_load_dotenv_cookie，向上遍历 4 级目录），不依赖 python-dotenv。
+#
+# 其余均为 Python 3.7+ 标准库：json / os / sys / glob / subprocess /
+# time / re / hashlib / base64 / xml.etree.ElementTree / urllib /
+# tempfile / shutil / argparse / concurrent.futures / datetime
+#
+# 可选（当前未启用）:
+# jsonschema>=4.20.0,<5.0.0    # schema 校验现为手写规则，无需此包
+#
+# 开发期可选:
+# black>=23.12.0
+# flake8>=7.0.0

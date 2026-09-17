@@ -1,0 +1,40 @@
+---
+id: REL-MATX-01-003
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 矩阵组合数超过平台上限时应报错或拒绝
+intent_ref: INTENT-REL-008
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-huge-matrix
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: huge matrix
+      runs-on: [ubuntu-latest, x64, small]
+      strategy:
+        matrix:
+          os: [ubuntu, centos, debian, alpine]
+          node: [14, 16, 18, 20]
+          arch: [x64, arm64]
+      steps:
+        - name: run
+          run: |
+            echo ${{ matrix.os }}-${{ matrix.node }}-${{ matrix.arch }}
+assertions:
+  - type: positive
+    target: error_message
+    contains: matrix
+    eval: llm_assisted
+    rubric: 报错是否清晰说明矩阵上限
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

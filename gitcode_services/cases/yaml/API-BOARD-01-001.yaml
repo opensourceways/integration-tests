@@ -1,0 +1,23 @@
+---
+id: API-BOARD-01-001
+dimensions: [completeness]
+dimension: completeness
+priority: P2
+title: 探测仓库 Projects/看板 API 可用性
+intent_ref: INTENT-ISSUE-006
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/projects"
+  method: GET
+  auth: token
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 404]
+  - type: positive
+    target: api_response_body
+    contains: '{'
+teardown:
+  reset: none

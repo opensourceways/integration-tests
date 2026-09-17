@@ -1,0 +1,40 @@
+---
+id: REL-TIME-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: job 运行 350 分钟观察正常终止 vs 超时 kill
+intent_ref: INTENT-REL-011
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-timeout-boundary
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: long running job
+      runs-on: [ubuntu-latest, x64, small]
+      timeout-minutes: 360
+      steps:
+        - name: run 350 min
+          run: |
+            echo start
+            sleep 21000
+            echo end
+assertions:
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: positive
+    target: run_logs
+    contains: end
+  - type: nonfunctional
+    target: latency
+    ge: 348
+    le: 360
+teardown:
+  reset: fixture

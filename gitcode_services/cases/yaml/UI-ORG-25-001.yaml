@@ -1,0 +1,46 @@
+---
+id: UI-ORG-25-001
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 组织设置与仓库级集成配置页面核心功能可达性
+intent_ref: INTENT-COMP-008
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/ghp-org/{owner}/settings"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".settings-menu, [class*='settings'], .org-settings"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "a:has-text('成员'), .menu-members, [class*='member']"
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: "a:has-text('仓库'), .menu-repo, [class*='repository']"
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: "a:has-text('集成'), .menu-integration, [class*='integration']"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: ".settings-menu, [class*='settings'], .org-settings"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "设置"
+  - type: positive
+    target: ui_element_visible
+    selector: ".settings-content, [class*='content'], .tab-content"
+teardown:
+  reset: none

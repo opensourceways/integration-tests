@@ -1,0 +1,43 @@
+---
+id: UI-ISSUE-25-001
+dimensions: ["usability"]
+dimension: usability
+priority: P0
+title: Issue 创建时空标题异常提示验证
+intent_ref: INTENT-USE-001
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/issues"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "button.search-bar-create"
+      timeout: 10000
+    - type: click
+      selector: "button.search-bar-create"
+    - type: wait
+      ms: 3000
+    - type: wait_for_selector
+      selector: "textarea:visible"
+      timeout: 10000
+    - type: type
+      selector: "textarea:visible"
+      value: "UI 自动化测试正文内容"
+    - type: click
+      selector: "button:has-text('新建 Issue')"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "标题"
+  - type: positive
+    target: ui_element_visible
+    selector: "textarea:visible"
+teardown:
+  reset: none

@@ -1,0 +1,34 @@
+id: UI-NAV-25-001
+dimensions:
+- usability
+dimension: usability
+priority: P2
+title: 无权限与 404 页面友好提示及返回引导
+intent_ref: INTENT-USE-012
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: https://gitcode.com/nonexistent-user-12345/nonexistent-repo-67890
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+  - type: wait
+    ms: 5000
+  - type: wait_for_selector
+    selector: body, .error-page, [class*='error'], [class*='not-found']
+    timeout: 10000
+assertions:
+- type: positive
+  target: ui_page_title
+  text: '404'
+- type: positive
+  target: ui_element_visible
+  selector: body
+- type: positive
+  target: ui_text_contains
+  selector: body
+  text: 页面找不到或无权限
+teardown:
+  reset: none

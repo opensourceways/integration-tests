@@ -1,0 +1,41 @@
+---
+id: SEC-ENV-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: 通过 ATOMGIT_ENV 写入污染数据不得破坏后续步骤执行上下文
+intent_ref: INTENT-SEC-006
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-env-poison
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: env poison test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: poison env file
+          run: |
+            echo 'MALICIOUS=bad' >> $ATOMGIT_ENV
+            echo 'PATH=/tmp' >> $ATOMGIT_ENV
+        - name: verify env not poisoned
+          run: |
+            echo "PATH=$PATH"
+            echo "MALICIOUS=$MALICIOUS"
+assertions:
+  - type: positive
+    target: run_logs
+    contains: /usr/local/bin
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: negative
+    target: run_logs
+    must_not_contain: "MALICIOUS=bad"
+teardown:
+  reset: fixture

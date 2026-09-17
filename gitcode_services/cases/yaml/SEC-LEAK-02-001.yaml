@@ -1,0 +1,43 @@
+---
+id: SEC-LEAK-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "工作流将 secret 写入 artifact 或 cache 导致持久化泄露"
+intent_ref: INTENT-SEC-003
+test_type: workflow
+setup:
+  repo_fixture: with-secrets
+  secrets: ["LEAK_SECRET"]
+workflow: |
+  name: test-secret-artifact
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: secret to artifact
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: write secret to file
+          run: |
+            echo '${{ secrets.LEAK_SECRET }}' > secret.txt
+        - name: upload artifact
+          uses: upload-artifact
+          with:
+            name: leaked
+            path: secret.txt
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: "LEAK_SECRET"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

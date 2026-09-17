@@ -1,0 +1,38 @@
+---
+id: COMP-MASK-02-001
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P0
+title: "运行日志面板中 Secret 值被自动遮掩为 ***"
+intent_ref: INTENT-COMP-010
+test_type: workflow
+setup:
+  repo_fixture: with-secrets
+  secrets: ["MY_TOKEN"]
+workflow: |
+  name: test-secret-mask
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test secret masking
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: echo secret
+          run: |
+            echo "Secret is ${{ secrets.MY_TOKEN }}"
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: "MY_TOKEN"
+  - type: positive
+    target: run_status
+    equals: "completed"
+teardown:
+  reset: fixture

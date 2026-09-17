@@ -1,0 +1,27 @@
+---
+id: API-ISSUE-01-003
+dimensions: ["completeness", "compatibility"]
+dimension: completeness
+priority: P1
+title: 创建标签并关联到 Issue
+intent_ref: INTENT-ISSUE-002
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/labels"
+  method: POST
+  params: {"name": "priority-high", "color": "#ff0000"}
+  auth: token
+  content_type: application/x-www-form-urlencoded
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.name"
+    json_value: priority-high
+teardown:
+  reset: fixture

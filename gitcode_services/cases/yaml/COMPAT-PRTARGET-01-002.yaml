@@ -1,0 +1,43 @@
+---
+id: COMPAT-PRTARGET-01-002
+dimensions: ["compatibility", "security"]
+dimension: compatibility
+priority: P0
+title: pull_request_target 中显式 checkout PR 头分支后执行不可信脚本应被隔离
+intent_ref: INTENT-COMPAT-024
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+workflow: |
+  name: test-pr-target-risk
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: checkout pr head and run
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout pr head
+          uses: checkout
+          with:
+            ref: ${{ atomgit.event.pull_request.head.ref }}
+        - name: run build script from pr
+          run: |
+            echo "Running build..."
+            echo "Token length is ${#DEPLOY_TOKEN}"
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

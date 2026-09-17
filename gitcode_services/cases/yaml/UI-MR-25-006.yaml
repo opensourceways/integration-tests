@@ -1,0 +1,38 @@
+---
+id: UI-MR-25-006
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P2
+title: 合并冲突时 Web 冲突解决入口与状态提示覆盖
+intent_ref: INTENT-COMP-012
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/pull/1"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".merge-request-state, [class*='state'], .mr-status"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: "button:has-text('解决冲突'), a:has-text('解决冲突'), .resolve-conflict"
+    - type: wait
+      ms: 5000
+    - type: wait_for_selector
+      selector: ".conflict-editor, [class*='conflict'], .resolve-editor"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "冲突"
+  - type: positive
+    target: ui_element_visible
+    selector: ".conflict-editor, [class*='conflict'], .resolve-editor"
+teardown:
+  reset: none

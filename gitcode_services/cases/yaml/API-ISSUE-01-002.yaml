@@ -1,0 +1,26 @@
+---
+id: API-ISSUE-01-002
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: 创建 Issue 并关闭
+intent_ref: INTENT-ISSUE-001
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/issues"
+  method: POST
+  params: {"title": "Bug: test failure", "body": "Steps to reproduce...", "labels": "bug"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.state"
+    json_value: open
+teardown:
+  reset: fixture

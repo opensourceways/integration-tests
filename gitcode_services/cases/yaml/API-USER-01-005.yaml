@@ -1,0 +1,23 @@
+---
+id: API-USER-01-005
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P0
+title: Reporter 角色不可推送代码
+intent_ref: INTENT-AUTH-002
+test_type: git
+setup:
+  repo_fixture: ComputingActionTest/bingo
+git:
+  action: push
+  args: {"remote": "origin", "branch": "main"}
+  local_path: ./reporter-repo
+assertions:
+  - type: negative
+    target: git_exit_code
+    equals: 0
+  - type: positive
+    target: git_output
+    contains: denied
+teardown:
+  reset: none

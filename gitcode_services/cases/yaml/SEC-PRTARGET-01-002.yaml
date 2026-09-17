@@ -1,0 +1,37 @@
+---
+id: SEC-PRTARGET-01-002
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: pull_request_target 中恶意 PR 修改 workflow 文件不被执行
+intent_ref: INTENT-SEC-007
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+workflow: |
+  name: test-pr-target-wf-tamper
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: verify workflow source
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: check workflow file sha
+          run: |
+            git checkout main
+            sha256sum .gitcode/workflows/test-pr-target-wf-tamper.yml
+assertions:
+  - type: positive
+    target: run_logs
+    contains: sha256sum
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+teardown:
+  reset: fixture

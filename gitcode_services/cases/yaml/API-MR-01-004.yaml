@@ -1,0 +1,26 @@
+---
+id: API-MR-01-004
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P0
+title: 提交 MR 行级评论
+intent_ref: INTENT-MR-003
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/pulls/3/comments"
+  method: POST
+  params: {"body": "建议添加异常处理"}
+  auth: token
+  expected_status: [201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 201
+  - type: positive
+    target: api_response_body
+    json_path: "$.body"
+    json_value: 建议添加异常处理
+teardown:
+  reset: fixture

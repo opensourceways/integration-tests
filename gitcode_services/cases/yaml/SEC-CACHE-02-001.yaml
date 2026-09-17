@@ -1,0 +1,38 @@
+---
+id: SEC-CACHE-02-001
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: "fork PR 写入与主分支相同 key 的 cache 导致投毒"
+intent_ref: INTENT-SEC-009
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: []
+workflow: |
+  name: test-run
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: run test
+          run: |
+            echo "done"
+trigger:
+  event: workflow_dispatch
+  as: maintainer
+fault_injection: null
+assertions:
+  - type: positive
+    target: run_status
+    equals: "completed"
+  - type: negative
+    target: run_logs
+    must_not_contain: "UNEXPECTED_BEHAVIOR"
+teardown:
+  reset: fixture

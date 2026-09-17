@@ -1,0 +1,36 @@
+---
+id: USE-MASK-01-001
+dimensions: ["usability", "security"]
+dimension: usability
+priority: P1
+title: Secret 掩码被绕过时日志应发出暴露预警
+intent_ref: INTENT-USE-011
+test_type: workflow
+setup:
+  repo_fixture: with-secrets
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-mask-warning
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: mask bypass warning
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: output secret via workaround
+          run: |
+            python3 -c "print('secret_value: ' + '${{ secrets.DEPLOY_TOKEN }}')"
+assertions:
+  - type: positive
+    target: run_logs
+    contains: warning
+    eval: llm_assisted
+    rubric: 日志是否对 secret 暴露发出明确警告
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

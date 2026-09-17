@@ -1,0 +1,43 @@
+---
+id: REL-FAULT-01-004
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 断开 runner 外网后观察依赖下载失败与重试
+intent_ref: INTENT-REL-016
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-network-partition
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: network partition test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: download external dependency
+          run: |
+            curl -fsSL https://example.com/dependency.tar.gz -o dep.tar.gz
+        - name: verify download
+          run: |
+            ls -lh dep.tar.gz
+fault_injection:
+  at: pre_job
+  action: network_partition
+  params: {"target": "external", "duration_sec": 60}
+  recovery_expectation: 依赖下载失败，报错清晰，恢复网络后重试成功
+assertions:
+  - type: positive
+    target: run_status
+    equals: failure
+  - type: positive
+    target: error_message
+    contains: connect
+    eval: llm_assisted
+    rubric: 错误信息是否明确提及网络连接失败
+teardown:
+  reset: fixture

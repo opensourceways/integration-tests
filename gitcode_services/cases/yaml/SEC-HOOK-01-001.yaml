@@ -1,0 +1,25 @@
+---
+id: SEC-HOOK-01-001
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: Webhook secret 在配置界面不回显且签名验证不可绕过
+intent_ref: INTENT-SEC-018
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+  secrets: ["WEBHOOK_SECRET"]
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/hooks"
+  method: GET
+  auth: token
+  expected_status: [200]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 200
+  - type: negative
+    target: api_response_body
+    must_not_contain: WEBHOOK_SECRET
+teardown:
+  reset: fixture

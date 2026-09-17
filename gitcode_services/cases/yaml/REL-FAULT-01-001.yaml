@@ -1,0 +1,45 @@
+---
+id: REL-FAULT-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: runner 磁盘写满后 job 行为与报错清晰度
+intent_ref: INTENT-REL-013
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-disk-full
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: disk full test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: write large file
+          run: |
+            dd if=/dev/zero of=/tmp/fill bs=1M count=100000
+        - name: should not run
+          run: echo after-fill
+fault_injection:
+  at: mid_job
+  action: disk_full
+  params: {"fill_path": "/tmp", "target_usage_percent": 100}
+  recovery_expectation: job 失败并报告磁盘空间不足，不导致 runner 永久损坏
+assertions:
+  - type: positive
+    target: run_status
+    equals: failure
+  - type: positive
+    target: error_message
+    contains: space
+    eval: llm_assisted
+    rubric: 错误信息是否明确提及磁盘空间不足
+  - type: negative
+    target: run_logs
+    must_not_contain: after-fill
+teardown:
+  reset: fixture

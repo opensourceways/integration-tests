@@ -1,0 +1,39 @@
+---
+id: SEC-INJ-01-003
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: issue_comment 正文含脚本注入 payload 时不应执行
+intent_ref: INTENT-SEC-005
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: issue_comment
+workflow: |
+  name: test-comment-injection
+  on:
+    issue_comment:
+      types: [created]
+  jobs:
+    test:
+      name: test comment injection
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: echo comment body
+          run: |
+            echo '${{ atomgit.event.comment.body }}'
+        - name: use comment in env
+          run: |
+            echo "BODY=$COMMENT_BODY"
+          env:
+            COMMENT_BODY: ${{ atomgit.event.comment.body }}
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: "root:x:"
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

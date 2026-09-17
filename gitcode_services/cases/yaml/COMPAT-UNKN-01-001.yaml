@@ -1,0 +1,35 @@
+---
+id: COMPAT-UNKN-01-001
+dimensions: ["compatibility", "usability"]
+dimension: compatibility
+priority: P1
+title: 含未知顶层字段的 YAML 应给出精确字段路径与有效值提示
+intent_ref: INTENT-COMPAT-002
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-unknown-field
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: test unknown field
+      runs-on: [ubuntu-latest, x64, small]
+      permissions:
+        contents: read
+      steps:
+        - name: hello
+          run: |
+            echo hello
+assertions:
+  - type: negative
+    target: run_status
+    equals: completed
+  - type: positive
+    target: error_message
+    contains: permissions
+teardown:
+  reset: none

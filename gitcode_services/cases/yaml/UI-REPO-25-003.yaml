@@ -1,0 +1,45 @@
+---
+id: UI-REPO-25-003
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 仓库文件在线编辑与预览
+intent_ref: INTENT-COMP-005
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/blob/main/README.md"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".blob-content, [class*='content'], .file-content"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "button:has-text('编辑'), a:has-text('编辑'), .edit-button"
+    - type: wait
+      ms: 3000
+    - type: wait_for_selector
+      selector: "textarea:visible, [class*='editor'] textarea, .monaco-editor"
+      timeout: 10000
+    - type: type
+      selector: "textarea:visible, [class*='editor'] textarea"
+      value: "\nUI 测试编辑内容"
+    - type: click
+      selector: "button:has-text('预览'), a:has-text('预览'), .preview-tab"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "UI 测试编辑内容"
+  - type: positive
+    target: ui_element_visible
+    selector: ".blob-content, [class*='preview'], .preview-content"
+teardown:
+  reset: none

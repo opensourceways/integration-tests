@@ -1,0 +1,35 @@
+---
+id: REL-MEM-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: small runner 上申请 12GB 内存观察 OOM kill 行为
+intent_ref: INTENT-REL-023
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-oom
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: oom test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: allocate 12GB
+          run: |
+            python3 -c "import numpy as np; a = np.zeros((12*1024*1024*1024//8,), dtype=np.float64); print('allocated')"
+assertions:
+  - type: positive
+    target: run_status
+    equals: failure
+  - type: positive
+    target: error_message
+    contains: kill
+    eval: llm_assisted
+    rubric: 错误信息是否明确提及 OOM 或进程被 kill
+teardown:
+  reset: fixture

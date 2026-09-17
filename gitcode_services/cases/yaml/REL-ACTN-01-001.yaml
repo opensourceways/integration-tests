@@ -1,0 +1,37 @@
+---
+id: REL-ACTN-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 依赖 action 不可用时 workflow 失败与报错清晰度
+intent_ref: INTENT-REL-017
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-action-unavailable
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: action unavailable test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: use nonexistent action
+          uses: nonexistent-org/nonexistent-action@v1
+        - name: should not run
+          run: echo never
+assertions:
+  - type: positive
+    target: run_status
+    equals: failure
+  - type: positive
+    target: error_message
+    contains: nonexistent
+  - type: negative
+    target: run_logs
+    must_not_contain: never
+teardown:
+  reset: fixture

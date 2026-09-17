@@ -1,0 +1,39 @@
+---
+id: SEC-PRTW-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "pull_request_target 触发时错误加载 fork PR 中的 workflow 版本"
+intent_ref: INTENT-SEC-008
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: []
+workflow: |
+  name: test-prt-wf-source
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: verify wf source
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: marker step
+          run: |
+            echo "base-repo-marker"
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+fault_injection: null
+assertions:
+  - type: positive
+    target: run_logs
+    contains: "base-repo-marker"
+  - type: negative
+    target: run_logs
+    must_not_contain: "evil-fork-marker"
+teardown:
+  reset: fixture

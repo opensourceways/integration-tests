@@ -1,0 +1,37 @@
+---
+id: UI-MR-25-005
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: Merge Request 合并后页面锁定与状态展示
+intent_ref: INTENT-COMP-004
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/pull/2"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".merge-request-state, [class*='state'], .mr-status"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+    - type: wait_for_selector
+      selector: ".comment-list, [class*='comment'], .discussion"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "已合并"
+  - type: negative
+    target: ui_element_visible
+    selector: "button:has-text('合入'):not([disabled])"
+  - type: positive
+    target: ui_element_visible
+    selector: ".comment-list, [class*='comment'], .discussion"
+teardown:
+  reset: none

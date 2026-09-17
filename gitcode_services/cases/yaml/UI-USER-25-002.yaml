@@ -1,0 +1,41 @@
+---
+id: UI-USER-25-002
+dimensions: ["usability"]
+dimension: usability
+priority: P2
+title: 个人设置页表单保存与即时反馈
+intent_ref: INTENT-USE-010
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/settings/profile"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".profile-form, [class*='profile'], .settings-form"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: wait_for_selector
+      selector: "input:visible, textarea:visible"
+      timeout: 10000
+    - type: type
+      selector: "input:visible"
+      value: "-UI-Test"
+    - type: click
+      selector: "button:has-text('保存'), button:has-text('更新'), .save-button"
+    - type: wait
+      ms: 5000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "保存"
+  - type: positive
+    target: ui_element_visible
+    selector: ".profile-form, [class*='profile'], .settings-form"
+teardown:
+  reset: none

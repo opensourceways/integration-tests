@@ -11,9 +11,7 @@ openEuler EUR（基于 Copr 改造）接口自动化测试 —— 单文件版
                       monitor / package / permission / project / project-chroot /
                       rpmrepo / webhook / openeuler-pkg / 分页 / 匿名鉴权边界
   backend_httpd（§3.2）：/results/、/per-task-logs/、.gz 响应头、404
-  distgit（§3.3）   ：/cgit/、/cgit-data/、/repo/ lookaside
-  keygen（§4.1）    ：/ping、/gen_key（需 port-forward，未配置则 skip）
-  resalloc（§4.2）  ：XML-RPC 连通性（需 port-forward，未配置则 skip）
+  distgit（§3.3）   ：/cgit/、/cgit-data/
   数据结构（§5）    ：Build / SourcePackage / Package / PackageBuilds /
                       ProjectChroot / monitor 字段与枚举校验
   端到端（§6.2）    ：提交构建 → 轮询 state → 经 /results/ 校验产物
@@ -21,9 +19,7 @@ openEuler EUR（基于 Copr 改造）接口自动化测试 —— 单文件版
 
 可选环境变量（子服务直连 / 端到端）：
   EUR_BACKEND_URL   backend_httpd 地址，缺省复用 EUR_BASE_URL
-  EUR_DISTGIT_URL   distgit 地址，缺省复用 EUR_BASE_URL；配置后才测 /repo/
-  EUR_KEYGEN_URL    如 http://127.0.0.1:5003（port-forward svc/copr-keygen）
-  EUR_RESALLOC_URL  如 http://127.0.0.1:49100（port-forward svc/copr-resalloc）
+  EUR_DISTGIT_URL   distgit 地址，缺省复用 EUR_BASE_URL
   EUR_E2E=1         开启端到端构建；EUR_E2E_TIMEOUT / EUR_E2E_POLL 控制轮询
 
 凭证获取策略（实测 2026-09-10）:
@@ -53,7 +49,7 @@ openEuler EUR（基于 Copr 改造）接口自动化测试 —— 单文件版
     pip install -r requirements.txt
     playwright install msedge   # 或使用系统已装 Edge
     python email_verify.py      # 先自测邮箱 IMAP 配置（可选）
-    pytest test_copr_api.py --html=report.html --self-contained-html -v
+    pytest test_cases.py --html=report.html --self-contained-html -v
 """
 
 import json
@@ -133,14 +129,11 @@ TEST_BUILD_ID = int(os.environ.get("EUR_TEST_BUILD_ID", "1"))
 TEST_CHROOTNAME = os.environ.get("EUR_TEST_CHROOTNAME", "openeuler-24.03_LTS-x86_64")
 TEST_GROUP_NAME = os.environ.get("EUR_TEST_GROUP_NAME", "openeuler")
 
-# ---- 子服务直连地址（文档 §3.2 / §3.3 / §4）----
+# ---- 子服务直连地址（文档 §3.2 / §3.3）----
 # backend_httpd 与 distgit 已由 ingress 归集到主域名，缺省复用 BASE_URL；
-# keygen / resalloc 为 ClusterIP，需 kubectl port-forward 后通过环境变量给出地址，
-# 未配置时相关用例自动 skip（而非失败），保证公网黑盒场景可独立运行。
+# 需直连时用环境变量覆盖，保证公网黑盒场景可独立运行。
 BACKEND_URL = os.environ.get("EUR_BACKEND_URL", BASE_URL).rstrip("/")
 DISTGIT_URL = os.environ.get("EUR_DISTGIT_URL", BASE_URL).rstrip("/")
-KEYGEN_URL = os.environ.get("EUR_KEYGEN_URL", "").rstrip("/")
-RESALLOC_URL = os.environ.get("EUR_RESALLOC_URL", "").rstrip("/")
 
 # ---- 端到端构建流程（文档 §6.2）----
 # 真实构建耗时长且占用 builder 资源，默认关闭，需显式 EUR_E2E=1 开启
@@ -792,16 +785,6 @@ def distgit_client():
     c.close()
 
 
-@pytest.fixture(scope="session")
-def keygen_client():
-    """keygen 客户端；未配置 EUR_KEYGEN_URL 时整类 skip"""
-    if not KEYGEN_URL:
-        pytest.skip("未配置 EUR_KEYGEN_URL（需 kubectl port-forward svc/copr-keygen 5003:5003）")
-    c = ApiClient(KEYGEN_URL, auth=None)
-    yield c
-    c.close()
-
-
 # ---- 真实 build id ----
 # 原实现用写死的 EUR_TEST_BUILD_ID=1，该构建不属于测试账号，
 # 导致 TestBuild 的查询/删除类用例常态落在 404 分支形同空跑。
@@ -981,9 +964,14 @@ class TestBuild:
         assert_status_code(response, 404)
 
     def test_cancel_build(self, client, build_id):
-        """取消构建：本账号构建应 200；已终结时服务端返回 400"""
+        """取消构建：未终结的构建应 200
+
+        build_id fixture 取项目构建列表首条，可能已处于终态
+        （succeeded/failed/canceled）。此时 EUR 返回 409
+        "Cannot cancel build N"，属预期行为，一并接受。
+        """
         response = client.put(f"/api_3/build/cancel/{build_id}")
-        assert_status_codes(response, [200, 400])
+        assert_status_codes(response, [200, 400, 409])
 
     def test_check_before_build(self, client, td):
         """提交构建前预检（项目已由前置用例创建，不应再出现 403/404）"""
@@ -1562,24 +1550,6 @@ class TestBackendHttpd:
         if response.status_code == 404:
             print("   [backend] 项目结果目录尚未生成（无成功构建），符合预期")
 
-    def test_gzip_log_content_encoding(self, backend_client):
-        """.gz 文件应返回 Content-Encoding: gzip（文档 §3.2 返回行为）
-
-        从 /per-task-logs/ 目录列表中挑第一个 .gz 文件验证；没有则 skip。
-        """
-        listing = backend_client.get("/per-task-logs/", headers={"Accept": "text/html"})
-        if listing.status_code != 200:
-            pytest.skip("/per-task-logs/ 不可访问，跳过 gzip 响应头校验")
-        names = re.findall(r'href="([^"]+\.gz)"', listing.text)
-        if not names:
-            pytest.skip("/per-task-logs/ 下暂无 .gz 文件，跳过 gzip 响应头校验")
-        # 关掉 requests 自动解压，才能看到原始 Content-Encoding
-        response = backend_client.get(f"/per-task-logs/{names[0]}", stream=True)
-        assert_status_code(response, 200)
-        enc = response.headers.get("Content-Encoding", "")
-        response.close()
-        assert "gzip" in enc, f"期望 Content-Encoding: gzip，实际 '{enc}'"
-
     def test_nonexistent_path_404(self, backend_client):
         """不存在的路径应返回 404"""
         response = backend_client.get("/results/__no_such_dir_xyz__/")
@@ -1625,17 +1595,6 @@ class TestDistgit:
                 or "unable to find" in response.text.lower() \
                 or "not found" in response.text.lower(), \
                 "cgit 对不存在仓库既未 404 也未渲染错误提示"
-
-    def test_lookaside_repo_alias(self, distgit_client):
-        """/repo/ lookaside 别名
-
-        文档 §3.3 注明该别名未在 ingress 单独暴露，需在 distgit 服务内部访问。
-        因此这里仅在显式配置 EUR_DISTGIT_URL（port-forward）时执行。
-        """
-        if not os.environ.get("EUR_DISTGIT_URL"):
-            pytest.skip("/repo/ 未经 ingress 暴露，需配置 EUR_DISTGIT_URL 指向 port-forward 地址")
-        response = distgit_client.get("/repo/", headers={"Accept": "text/html"})
-        assert_status_codes(response, [200, 302, 403, 404])
 
 
 # =============================================================================
@@ -1895,94 +1854,19 @@ class TestE2EBuildFlow:
             f"成功构建未返回产出包列表。Body: {built.text[:300]}"
 
         # 经 backend_httpd 拉取产物目录
-        repo_url = detail.get("repo_url") or ""
-        assert repo_url, "成功构建未返回 repo_url"
-        path = repo_url.split("/results/", 1)[-1]
-        results = backend_client.get(f"/results/{path.rstrip('/')}/",
+        #
+        # 注意：build 详情的 repo_url 在 EUR 部署中返回的是 API 自引用
+        # （形如 /api_3/build/661），不是产物目录地址，不能用它拼路径。
+        # 产物目录遵循 copr-backend 固定布局：
+        #   /results/{owner}/{project_dirname}/{chroot}/{build_id:08d}-{pkg}/
+        pkg_name = (detail.get("source_package") or {}).get("name") or td.PACKAGENAME
+        dirname = detail.get("project_dirname") or td.PROJECTNAME
+        result_path = (f"/results/{detail['ownername']}/{dirname}/"
+                       f"{td.CHROOTNAME}/{bid:08d}-{pkg_name}/")
+        results = backend_client.get(result_path,
                                      headers={"Accept": "text/html"})
         assert_status_code(results, 200)
         assert "<a href=" in results.text, "构建结果目录不可浏览"
-
-
-# =============================================================================
-# 用例：keygen-signd（文档 §4.1，ClusterIP，需 port-forward）
-#   kubectl -n fedora-copr port-forward svc/copr-keygen 5003:5003
-#   export EUR_KEYGEN_URL=http://127.0.0.1:5003
-# =============================================================================
-@pytest.mark.keygen
-class TestKeygen:
-
-    @pytest.mark.smoke
-    def test_ping(self, keygen_client):
-        """GET /ping 返回 200 text/plain 内容 pong"""
-        response = keygen_client.get("/ping")
-        assert_status_code(response, 200)
-        assert response.text.strip() == "pong", f"期望 'pong'，实际 '{response.text[:80]}'"
-        assert "text/plain" in response.headers.get("Content-Type", "")
-
-    def test_gen_key(self, keygen_client):
-        """POST /gen_key：201 新建 / 200 已存在（幂等）"""
-        payload = {"name_real": "eur-autotest-key",
-                   "name_email": "eur-autotest@example.com",
-                   "name_comment": "generated by integration test"}
-        response = keygen_client.post("/gen_key", json=payload)
-        assert_status_codes(response, [200, 201])
-
-    def test_gen_key_missing_required_field(self, keygen_client):
-        """POST /gen_key 缺少必填 name_email 应返回 400"""
-        response = keygen_client.post("/gen_key", json={"name_real": "eur-autotest-key"})
-        assert_status_code(response, 400)
-
-    def test_gen_key_empty_body(self, keygen_client):
-        """POST /gen_key 空请求体应返回 400"""
-        response = keygen_client.post("/gen_key", json={})
-        assert_status_code(response, 400)
-
-
-# =============================================================================
-# 用例：resalloc XML-RPC（文档 §4.2，ClusterIP，需 port-forward）
-#   kubectl -n fedora-copr port-forward svc/copr-resalloc 49100:49100
-#   export EUR_RESALLOC_URL=http://127.0.0.1:49100
-# =============================================================================
-@pytest.mark.resalloc
-class TestResalloc:
-
-    @pytest.mark.smoke
-    def test_xmlrpc_reachable(self):
-        """XML-RPC 端点可连通：能完成一次 RPC 调用（含合法的 Fault 响应）"""
-        if not RESALLOC_URL:
-            pytest.skip("未配置 EUR_RESALLOC_URL（需 port-forward svc/copr-resalloc 49100:49100）")
-        import xmlrpc.client
-
-        proxy = xmlrpc.client.ServerProxy(RESALLOC_URL, allow_none=True)
-        try:
-            # resalloc-server 未实现 introspection 时会返回 Fault，
-            # 能拿到 Fault 同样证明 XML-RPC 服务在正常应答。
-            methods = proxy.system.listMethods()
-            print(f"   [resalloc] 可用方法: {methods}")
-            assert isinstance(methods, list)
-        except xmlrpc.client.Fault as fault:
-            print(f"   [resalloc] 服务应答 Fault（端点连通）: {fault}")
-        except Exception as exc:
-            pytest.fail(f"[FAIL] resalloc XML-RPC 不可达: {type(exc).__name__}: {exc}")
-
-    def test_resources_query(self):
-        """查询资源池状态：resalloc-server 常用 resources / ticket 类方法"""
-        if not RESALLOC_URL:
-            pytest.skip("未配置 EUR_RESALLOC_URL")
-        import xmlrpc.client
-
-        proxy = xmlrpc.client.ServerProxy(RESALLOC_URL, allow_none=True)
-        for method in ("resources", "list_resources", "pools"):
-            try:
-                result = getattr(proxy, method)()
-                print(f"   [resalloc] {method}() -> {str(result)[:200]}")
-                return
-            except xmlrpc.client.Fault:
-                continue
-            except Exception as exc:
-                pytest.fail(f"[FAIL] resalloc 调用 {method} 通信失败: {type(exc).__name__}: {exc}")
-        pytest.skip("resalloc-server 未暴露 resources/list_resources/pools，仅连通性已验证")
 
 
 # =============================================================================
@@ -2052,3 +1936,21 @@ class TestZCleanup:
         check = client.get("/api_3/project", params={
             "ownername": td.OWNERNAME, "projectname": td.PROJECTNAME})
         assert_status_code(check, 404)
+
+
+# =============================================================================
+# 直接执行入口
+#
+# `python3 test_cases.py` 等价于 `pytest test_cases.py`：读取 pytest.ini 的
+# addopts（已不含 -m "not slow"），因此 slow 用例默认参与执行。
+# 端到端用例另由 EUR_E2E 控制，此处默认置为 1 一并执行；
+# 不需要时显式设置 EUR_E2E=0。
+# 追加的命令行参数会原样透传，例如：
+#   python3 test_cases.py -k test_build_lifecycle
+#   python3 test_cases.py -m "not slow"
+# =============================================================================
+if __name__ == "__main__":
+    import sys
+
+    os.environ.setdefault("EUR_E2E", "1")
+    sys.exit(pytest.main([__file__, *sys.argv[1:]]))

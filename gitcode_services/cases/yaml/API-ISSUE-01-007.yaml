@@ -1,0 +1,23 @@
+---
+id: API-ISSUE-01-007
+dimensions: [completeness]
+dimension: completeness
+priority: P2
+title: 探测仓库 Issue 模板目录存在性
+intent_ref: INTENT-ISSUE-005
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/contents/.gitcode"
+  method: GET
+  auth: token
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 200
+  - type: positive
+    target: api_response_body
+    contains: "name"
+teardown:
+  reset: none

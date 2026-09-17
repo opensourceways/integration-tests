@@ -1,0 +1,38 @@
+---
+id: USE-ANNO-01-001
+dimensions: ["usability"]
+dimension: usability
+priority: P1
+title: "workflow 命令 ::error:: / ::warning:: 注解在 UI 中的可读性与定位能力"
+intent_ref: INTENT-USE-016
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-annotation-ui
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: annotation test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: emit error annotation
+          run: |
+            echo '::error file=src/main.py,line=10::变量未定义'
+        - name: emit warning annotation
+          run: |
+            echo '::warning file=src/util.py,line=5::建议添加类型注解'
+assertions:
+  - type: positive
+    target: side_effect
+    contains: error
+    eval: llm_assisted
+    rubric: UI 是否清晰显示 error/warning 注解及文件行号
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

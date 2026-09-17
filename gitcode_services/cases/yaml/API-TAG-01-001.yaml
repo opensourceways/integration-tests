@@ -1,0 +1,26 @@
+---
+id: API-TAG-01-001
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 通过 API 创建 Release 与 Tag
+intent_ref: INTENT-GIT-004
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/releases"
+  method: POST
+  params: {"tag_name": "v1.0.1", "name": "First Release", "target_commitish": "main", "body": "Release notes"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.tag_name"
+    json_value: v1.0.1
+teardown:
+  reset: fixture

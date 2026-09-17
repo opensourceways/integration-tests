@@ -1,0 +1,62 @@
+---
+id: REL-STEPS-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 单 job 16 个 step 的调度与状态回写完整性
+intent_ref: INTENT-REL-012
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-many-steps
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: many steps job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: step 01
+          run: echo step01
+        - name: step 02
+          run: echo step02
+        - name: step 03
+          run: echo step03
+        - name: step 04
+          run: echo step04
+        - name: step 05
+          run: echo step05
+        - name: step 06
+          run: echo step06
+        - name: step 07
+          run: echo step07
+        - name: step 08
+          run: echo step08
+        - name: step 09
+          run: echo step09
+        - name: step 10
+          run: echo step10
+        - name: step 11
+          run: echo step11
+        - name: step 12
+          run: echo step12
+        - name: step 13
+          run: echo step13
+        - name: step 14
+          run: echo step14
+        - name: step 15
+          run: echo step15
+        - name: step 16
+          run: echo step16
+assertions:
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: positive
+    target: run_logs
+    contains: step16
+teardown:
+  reset: fixture

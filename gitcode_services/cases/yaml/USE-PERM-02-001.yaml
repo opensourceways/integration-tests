@@ -1,0 +1,31 @@
+id: USE-PERM-02-001
+dimensions:
+- usability
+- security
+dimension: usability
+priority: P0
+title: 无权限用户尝试触发流水线或查看 Secrets 配置页时的 UI 反馈
+intent_ref: INTENT-USE-022
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: https://gitcode.com/{owner}/{repo}/settings/secrets
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+  - type: wait_for_selector
+    selector: body
+    timeout: 10000
+assertions:
+- type: positive
+  target: ui_text_contains
+  selector: body
+  text: 页面找不到或无权限
+- type: negative
+  target: ui_text_contains
+  selector: body
+  text: 添加 Secret
+teardown:
+  reset: none

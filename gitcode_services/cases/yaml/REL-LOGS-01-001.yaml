@@ -1,0 +1,36 @@
+---
+id: REL-LOGS-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 单 step 输出 50MB 文本日志的实时性与完整性
+intent_ref: INTENT-REL-009
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-large-logs
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: large log output
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: generate 50MB log
+          run: |
+            dd if=/dev/urandom bs=1024 count=51200 | base64
+        - name: verify tail present
+          run: |
+            echo "LOG_END_MARKER"
+assertions:
+  - type: positive
+    target: run_logs
+    contains: LOG_END_MARKER
+  - type: nonfunctional
+    target: latency
+    le: 300
+teardown:
+  reset: fixture

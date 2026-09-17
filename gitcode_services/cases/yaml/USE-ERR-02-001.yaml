@@ -1,0 +1,29 @@
+id: USE-ERR-02-001
+dimensions:
+- usability
+dimension: usability
+priority: P0
+title: 流水线失败时日志错误信息可读性与定位体验
+intent_ref: INTENT-USE-016
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: https://gitcode.com/{owner}/{repo}/actions/runs/1
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+  - type: wait_for_selector
+    selector: body
+    timeout: 10000
+assertions:
+- type: positive
+  target: ui_element_visible
+  selector: body
+- type: positive
+  target: ui_text_contains
+  selector: body
+  text: 暂无数据
+teardown:
+  reset: none

@@ -1,0 +1,37 @@
+---
+id: SEC-INJ-01-002
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: 分支名含 shell 元字符时不应破坏 run 脚本
+intent_ref: INTENT-SEC-004
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: push
+workflow: |
+  name: test-branch-name-injection
+  on:
+    push:
+      branches: [main]
+  jobs:
+    test:
+      name: test branch name
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: echo branch
+          run: |
+            echo '${{ atomgit.ref_name }}'
+        - name: use branch in script
+          run: |
+            git checkout '${{ atomgit.ref_name }}'
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: rm -rf
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

@@ -1,0 +1,23 @@
+---
+id: GIT-CLONE-01-003
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P0
+title: Git Clone 使用 SSH 密钥鉴权
+intent_ref: INTENT-GIT-001
+test_type: git
+setup:
+  repo_fixture: ComputingActionTest/bingo
+git:
+  action: clone
+  args: {"url": "git@gitcode.com:ComputingActionTest/gitcode_api.git"}
+  local_path: ./cloned-ssh-repo
+assertions:
+  - type: positive
+    target: git_exit_code
+    equals: 0
+  - type: positive
+    target: git_output
+    contains: Cloning into
+teardown:
+  reset: fixture

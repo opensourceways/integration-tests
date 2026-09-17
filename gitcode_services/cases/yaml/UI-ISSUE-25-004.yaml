@@ -1,0 +1,43 @@
+---
+id: UI-ISSUE-25-004
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: Issue 标签与里程碑绑定功能
+intent_ref: INTENT-COMP-002
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/issues/1"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".issue-detail, [class*='detail']"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "[class*='label'] .edit, .label-select, button:has-text('标签')"
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: ".dropdown-item:visible, [class*='option']:visible"
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "[class*='milestone'] .edit, .milestone-select, button:has-text('里程碑')"
+    - type: wait
+      ms: 2000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: ".issue-detail, [class*='detail']"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "标签"
+teardown:
+  reset: none

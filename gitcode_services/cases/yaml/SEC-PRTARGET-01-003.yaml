@@ -1,0 +1,41 @@
+---
+id: SEC-PRTARGET-01-003
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: pull_request_target 的 workflow 文件来源校验
+intent_ref: INTENT-SEC-008
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+trigger:
+  event: pull_request_target
+  as: untrusted_contributor
+workflow: |
+  name: test-pr-target-source
+  on:
+    pull_request_target:
+      branches: [main]
+  jobs:
+    test:
+      name: verify workflow source
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: print workflow path
+          run: |
+            echo "Workflow file path is ${{ atomgit.workflow }}"
+        - name: verify source branch
+          run: |
+            echo "Base ref is ${{ atomgit.base_ref }}"
+assertions:
+  - type: positive
+    target: run_logs
+    contains: base ref is refs/heads/main
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: negative
+    target: run_logs
+    must_not_contain: "workflow file not found"
+teardown:
+  reset: fixture

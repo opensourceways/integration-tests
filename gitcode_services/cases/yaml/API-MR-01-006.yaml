@@ -1,0 +1,25 @@
+---
+id: API-MR-01-006
+dimensions: ["completeness", "reliability"]
+dimension: completeness
+priority: P0
+title: MR 必须过 CI 才能合并
+intent_ref: INTENT-MR-004
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+  branch_protection: main
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/pulls/1/merge"
+  method: POST
+  auth: token
+  expected_status: [405, 422, 409]
+assertions:
+  - type: negative
+    target: api_status_code
+    status_codes: [405, 422, 409]
+  - type: positive
+    target: api_response_body
+    contains: CI
+teardown:
+  reset: fixture

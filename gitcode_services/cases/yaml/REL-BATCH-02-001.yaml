@@ -1,0 +1,25 @@
+---
+id: REL-BATCH-02-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: "同时取消多个运行 — 批量选择后取消的 UI 与后端一致性"
+intent_ref: INTENT-REL-024
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

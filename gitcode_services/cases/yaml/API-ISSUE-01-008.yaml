@@ -1,0 +1,24 @@
+---
+id: API-ISSUE-01-008
+dimensions: [completeness]
+dimension: completeness
+priority: P2
+title: 探测 Issue 创建 API 是否支持模板参数
+intent_ref: INTENT-ISSUE-005
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/issues"
+  method: POST
+  params: {"title": "Test with template", "body": "Body content", "template": "bug_report"}
+  auth: token
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201, 422]
+  - type: positive
+    target: api_response_body
+    contains: "number"
+teardown:
+  reset: fixture

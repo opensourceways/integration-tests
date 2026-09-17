@@ -1,0 +1,46 @@
+---
+id: SEC-FORK-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: fork PR 触发 pull_request 时严禁读取目标仓库 secrets
+intent_ref: INTENT-SEC-001
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: fork_pr
+  as: untrusted_contributor
+workflow: |
+  name: test-fork-secret-isolation
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: test secret access from fork
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: echo secret
+          run: |
+            echo "Secret is ${{ secrets.DEPLOY_TOKEN }}"
+        - name: env secret
+          run: |
+            echo "Env secret is $DEPLOY_TOKEN"
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: negative
+    target: secret_access
+    must_not_contain: DEPLOY_TOKEN
+teardown:
+  reset: fixture

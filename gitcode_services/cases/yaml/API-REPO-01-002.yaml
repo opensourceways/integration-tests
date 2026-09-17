@@ -1,0 +1,25 @@
+---
+id: API-REPO-01-002
+dimensions: ["completeness"]
+dimension: completeness
+priority: P1
+title: 空仓库的分支列表返回空数组
+intent_ref: INTENT-GIT-005
+test_type: api
+setup:
+  repo_fixture: empty-repo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/branches"
+  method: GET
+  auth: token
+  expected_status: [200]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_code: 200
+  - type: positive
+    target: api_response_body
+    json_path: "$"
+    json_value: []
+teardown:
+  reset: fixture

@@ -1,0 +1,26 @@
+---
+id: COMP-ARTIFACT-02-001
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P1
+title: "运行详情页中 Artifact 上传结果的下载入口与文件列表"
+intent_ref: INTENT-SPEC-008
+test_type: ui
+setup:
+  repo_fixture: null
+  secrets: []
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

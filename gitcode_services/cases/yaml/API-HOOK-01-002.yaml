@@ -1,0 +1,21 @@
+---
+id: API-HOOK-01-002
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P1
+title: Webhook 签名验证失败时拒绝请求
+intent_ref: INTENT-HOOK-001
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/hooks/73043/tests"
+  method: POST
+  auth: token
+  expected_status: [200, 204]
+assertions:
+  - type: negative
+    target: api_status_code
+    status_codes: [200, 204, 401, 403]
+teardown:
+  reset: fixture

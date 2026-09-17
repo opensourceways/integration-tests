@@ -1,0 +1,26 @@
+---
+id: COMP-DISPATCH-02-001
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P1
+title: "通过 UI 手动触发 workflow_dispatch 并填写 inputs 参数"
+intent_ref: INTENT-SPEC-004
+test_type: ui
+setup:
+  repo_fixture: null
+  secrets: []
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

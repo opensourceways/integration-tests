@@ -1,0 +1,26 @@
+---
+id: COMP-FORK-02-001
+dimensions: ["completeness", "usability"]
+dimension: completeness
+priority: P1
+title: "仓库 Fork 流程的 UI 向导与 Fork 后仓库独立性验证"
+intent_ref: INTENT-SPEC-032
+test_type: ui
+setup:
+  repo_fixture: null
+  secrets: []
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

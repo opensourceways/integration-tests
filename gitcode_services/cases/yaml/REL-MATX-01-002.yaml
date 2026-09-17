@@ -1,0 +1,41 @@
+---
+id: REL-MATX-01-002
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: matrix fail-fast=true 时单实例失败取消其余实例
+intent_ref: INTENT-REL-007
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-fail-fast
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: matrix fail fast
+      runs-on: [ubuntu-latest, x64, small]
+      strategy:
+        matrix:
+          val: [pass, fail, pass2]
+        fail-fast: true
+      steps:
+        - name: conditional fail
+          run: |
+            if [ "${{ matrix.val }}" = "fail" ]; then exit 1; fi
+            echo ${{ matrix.val }}
+assertions:
+  - type: positive
+    target: job_status
+    equals: failure
+  - type: positive
+    target: job_status
+    equals: cancelled
+  - type: positive
+    target: run_status
+    equals: failure
+teardown:
+  reset: fixture

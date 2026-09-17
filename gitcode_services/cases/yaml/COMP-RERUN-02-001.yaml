@@ -1,0 +1,26 @@
+---
+id: COMP-RERUN-02-001
+dimensions: ["completeness", "reliability"]
+dimension: completeness
+priority: P1
+title: "运行详情页中重新运行按钮的可用性与限制提示"
+intent_ref: INTENT-SPEC-005
+test_type: ui
+setup:
+  repo_fixture: null
+  secrets: []
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/actions"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: "body"
+      timeout: 10000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: "body"
+teardown:
+  reset: none

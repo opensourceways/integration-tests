@@ -1,0 +1,36 @@
+---
+id: USE-NOTIF-01-001
+dimensions: ["usability"]
+dimension: usability
+priority: P1
+title: MR 触发 CI 失败后通知的时效性与信息完整性
+intent_ref: INTENT-USE-008
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: pr
+workflow: |
+  name: test-mr-ci-fail
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: failing job
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: always fail
+          run: |
+            exit 1
+assertions:
+  - type: positive
+    target: side_effect
+    contains: CI failed
+    eval: llm_assisted
+    rubric: 通知是否包含关键信息（MR标题、job名、链接）
+  - type: nonfunctional
+    target: latency
+    le: 300
+teardown:
+  reset: fixture

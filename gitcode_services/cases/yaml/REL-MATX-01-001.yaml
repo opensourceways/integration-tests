@@ -1,0 +1,38 @@
+---
+id: REL-MATX-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: matrix max-parallel=2 时矩阵展开实例并发度被限制
+intent_ref: INTENT-REL-004
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-max-parallel
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: matrix parallel
+      runs-on: [ubuntu-latest, x64, small]
+      strategy:
+        matrix:
+          val: [1, 2, 3, 4]
+        max-parallel: 2
+      steps:
+        - name: run
+          run: |
+            echo ${{ matrix.val }}
+            sleep 10
+assertions:
+  - type: positive
+    target: concurrency_isolation
+    le: 2
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: none

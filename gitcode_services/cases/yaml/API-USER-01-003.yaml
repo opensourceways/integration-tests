@@ -1,0 +1,22 @@
+---
+id: API-USER-01-003
+dimensions: ["completeness", "security"]
+dimension: completeness
+priority: P0
+title: PAT 无 repo scope 时访问仓库 API 返回 403
+intent_ref: INTENT-AUTH-001
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+  secrets: ["PAT_NO_REPO_SCOPE"]
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}"
+  method: GET
+  auth: token
+  expected_status: [403, 401]
+assertions:
+  - type: negative
+    target: api_status_code
+    status_codes: [403, 401]
+teardown:
+  reset: none

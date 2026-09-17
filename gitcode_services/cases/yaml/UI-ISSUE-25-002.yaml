@@ -1,0 +1,38 @@
+---
+id: UI-ISSUE-25-002
+dimensions: ["usability"]
+dimension: usability
+priority: P0
+title: Issue 列表筛选与排序交互响应验证
+intent_ref: INTENT-USE-002
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/issues?state=open"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".issue-list, .issues-list, [class*='issue']"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: "button:has-text('已关闭'), .filter-closed, [class*='closed']"
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: "button:has-text('最新更新'), .sort-updated, [class*='sort']"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_url_match
+    contains: "state="
+  - type: positive
+    target: ui_element_visible
+    selector: ".issue-list, .issues-list, [class*='issue']"
+teardown:
+  reset: none

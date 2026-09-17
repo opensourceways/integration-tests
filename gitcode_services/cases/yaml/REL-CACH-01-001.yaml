@@ -1,0 +1,39 @@
+---
+id: REL-CACH-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 写入 500MB cache 观察上限与 LRU 淘汰
+intent_ref: INTENT-REL-021
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-cache-size
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: large cache test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: create 500MB cache data
+          run: |
+            mkdir -p cache-data
+            dd if=/dev/urandom of=cache-data/bigfile.bin bs=1M count=500
+        - name: save cache
+          uses: cache
+          with:
+            path: cache-data
+            key: large-cache-test
+assertions:
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: positive
+    target: run_logs
+    contains: cache
+teardown:
+  reset: fixture

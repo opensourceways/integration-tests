@@ -1,0 +1,43 @@
+---
+id: UI-REPO-25-002
+dimensions: ["usability"]
+dimension: usability
+priority: P1
+title: 分支切换器搜索与切换体验
+intent_ref: INTENT-USE-006
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".branch-selector, [class*='branch'], .repo-branch"
+      timeout: 10000
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: ".branch-selector, [class*='branch'], .repo-branch"
+    - type: wait
+      ms: 2000
+    - type: type
+      selector: "input:visible, [class*='search'] input"
+      value: "main"
+    - type: wait
+      ms: 2000
+    - type: click
+      selector: ".branch-item:visible, [class*='option']:visible"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_url_match
+    contains: "ref="
+  - type: positive
+    target: ui_element_visible
+    selector: ".file-tree, [class*='file-list'], .repository-content"
+teardown:
+  reset: none

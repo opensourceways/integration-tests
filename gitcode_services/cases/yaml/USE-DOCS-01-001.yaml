@@ -1,0 +1,24 @@
+---
+id: USE-DOCS-01-001
+dimensions: ["usability"]
+dimension: usability
+priority: P0
+title: 官方文档中 GitHub 专有措辞应已替换为 GitCode 术语
+intent_ref: INTENT-USE-017
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/contents/README.md"
+  method: GET
+  auth: token
+  expected_status: [200]
+assertions:
+  - type: negative
+    target: api_response_body
+    must_not_contain: GitHub Actions
+  - type: positive
+    target: api_response_body
+    contains: GitCode
+teardown:
+  reset: none

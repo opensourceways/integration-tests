@@ -1,0 +1,45 @@
+---
+id: SEC-RUNNER-01-001
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: 复用型 Runner 不得跨 job 残留敏感文件或环境变量
+intent_ref: INTENT-SEC-016
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+  secrets: ["DEPLOY_TOKEN"]
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-runner-residue
+  on:
+    workflow_dispatch:
+  jobs:
+    job-a:
+      name: write secret file
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: write secret
+          run: |
+            echo '${{ secrets.DEPLOY_TOKEN }}' > /tmp/secret_file.txt
+            export SECRET_VAR='${{ secrets.DEPLOY_TOKEN }}'
+    job-b:
+      name: check residue
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: check file residue
+          run: |
+            if [ -f /tmp/secret_file.txt ]; then cat /tmp/secret_file.txt; fi
+        - name: check env residue
+          run: |
+            echo "SECRET_VAR=$SECRET_VAR"
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: DEPLOY_TOKEN
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

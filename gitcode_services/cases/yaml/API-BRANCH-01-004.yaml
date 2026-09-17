@@ -1,0 +1,26 @@
+---
+id: API-BRANCH-01-004
+dimensions: ["completeness", "compatibility"]
+dimension: completeness
+priority: P1
+title: 通过 API 创建分支
+intent_ref: INTENT-GIT-004
+test_type: api
+setup:
+  repo_fixture: ComputingActionTest/bingo
+api:
+  endpoint: "/api/v5/repos/{owner}/{repo}/branches"
+  method: POST
+  params: {"branch_name": "test-branch-api-004", "ref": "main"}
+  auth: token
+  expected_status: [200, 201]
+assertions:
+  - type: positive
+    target: api_status_code
+    status_codes: [200, 201]
+  - type: positive
+    target: api_response_body
+    json_path: "$.name"
+    json_value: test-branch-api-004
+teardown:
+  reset: fixture

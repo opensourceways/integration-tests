@@ -1,0 +1,35 @@
+---
+id: UI-REPO-25-001
+dimensions: ["usability"]
+dimension: usability
+priority: P1
+title: 仓库文件树大目录下加载与浏览体验
+intent_ref: INTENT-USE-005
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".file-tree, [class*='file-list'], .repository-content"
+      timeout: 15000
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: ".folder-item:visible, [class*='folder']:visible, .tree-item:has([class*='directory'])"
+    - type: wait
+      ms: 3000
+assertions:
+  - type: positive
+    target: ui_element_visible
+    selector: ".file-tree, [class*='file-list'], .repository-content"
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "README"
+teardown:
+  reset: none

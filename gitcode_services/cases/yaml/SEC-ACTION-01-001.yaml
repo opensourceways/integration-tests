@@ -1,0 +1,34 @@
+---
+id: SEC-ACTION-01-001
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: 浮动 tag 被篡改后使用 commit SHA 固定可防供应链攻击
+intent_ref: INTENT-SEC-014
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-action-ref-pin
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: action ref pin
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: use floating tag
+          uses: docker/build-push-action@v6
+        - name: use commit sha
+          uses: docker/build-push-action@abcdef1234567890abcdef1234567890abcdef12
+assertions:
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: negative
+    target: run_logs
+    must_not_contain: "unable to resolve action"
+teardown:
+  reset: none

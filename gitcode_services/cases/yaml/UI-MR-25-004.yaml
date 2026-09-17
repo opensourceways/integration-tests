@@ -1,0 +1,42 @@
+---
+id: UI-MR-25-004
+dimensions: ["completeness"]
+dimension: completeness
+priority: P0
+title: Merge Request 差异对比页代码评审评论完整渲染
+intent_ref: INTENT-COMP-003
+test_type: ui
+setup:
+  repo_fixture: null
+ui:
+  url: "https://gitcode.com/{owner}/{repo}/pull/1/files"
+  viewport:
+    width: 1280
+    height: 720
+  actions:
+    - type: wait_for_selector
+      selector: ".diff-file, [class*='diff'], .file-changes"
+      timeout: 10000
+    - type: wait
+      ms: 3000
+    - type: click
+      selector: ".diff-line-num, [class*='line-number']"
+    - type: wait
+      ms: 2000
+    - type: type
+      selector: "textarea:visible, [class*='comment'] textarea"
+      value: "diff 行评论测试"
+    - type: click
+      selector: "button:has-text('提交'), button:has-text('评论')"
+    - type: wait
+      ms: 5000
+assertions:
+  - type: positive
+    target: ui_text_contains
+    selector: "body"
+    text: "diff 行评论测试"
+  - type: positive
+    target: ui_element_visible
+    selector: ".diff-file, [class*='diff'], .file-changes"
+teardown:
+  reset: none

@@ -1,0 +1,38 @@
+---
+id: REL-ARTF-01-001
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: 上传 500MB artifact 观察上限与报错
+intent_ref: INTENT-REL-020
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-artifact-size
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: large artifact test
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: create 500MB file
+          run: |
+            dd if=/dev/urandom of=bigfile.bin bs=1M count=500
+        - name: upload artifact
+          uses: upload-artifact
+          with:
+            name: large-artifact
+            path: bigfile.bin
+assertions:
+  - type: positive
+    target: run_status
+    equals: completed
+  - type: positive
+    target: run_logs
+    contains: upload
+teardown:
+  reset: fixture

@@ -1,0 +1,38 @@
+---
+id: SEC-ROLE-02-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: "Developer 角色不应触发仅限 Maintainer 的 workflow 或读取组织级 secret"
+intent_ref: INTENT-SEC-013
+test_type: workflow
+setup:
+  repo_fixture: default
+  secrets: ["ORG_SECRET"]
+workflow: |
+  name: test-role-restrict
+  on:
+    workflow_dispatch:
+  jobs:
+    deploy:
+      name: deploy to prod
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: use org secret
+          run: |
+            echo "org secret present"
+trigger:
+  event: workflow_dispatch
+  as: untrusted_contributor
+fault_injection: null
+assertions:
+  - type: negative
+    target: run_status
+    equals: "blocked_or_failed"
+  - type: negative
+    target: run_logs
+    must_not_contain_secret: "ORG_SECRET"
+teardown:
+  reset: fixture

@@ -1,0 +1,43 @@
+---
+id: SEC-INJ-01-001
+dimensions: ["security"]
+dimension: security
+priority: P0
+title: PR 标题含命令注入 payload 时不应执行
+intent_ref: INTENT-SEC-004
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: pr
+  as: untrusted_contributor
+workflow: |
+  name: test-pr-title-injection
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: test injection
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: use pr title in run
+          run: |
+            echo '${{ atomgit.event.pull_request.title }}'
+        - name: use pr title in env
+          run: |
+            echo "TITLE=$PR_TITLE"
+          env:
+            PR_TITLE: ${{ atomgit.event.pull_request.title }}
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: "root:x:"
+  - type: positive
+    target: run_logs
+    contains: ; cat /etc/passwd
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture

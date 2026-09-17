@@ -1,0 +1,39 @@
+---
+id: REL-FAULT-01-002
+dimensions: ["reliability"]
+dimension: reliability
+priority: P1
+title: stress CPU 时 step 超时与心跳保活
+intent_ref: INTENT-REL-014
+test_type: workflow
+setup:
+  repo_fixture: ComputingActionTest/bingo
+trigger:
+  event: workflow_dispatch
+workflow: |
+  name: test-cpu-saturate
+  on:
+    workflow_dispatch:
+  jobs:
+    test:
+      name: cpu saturate test
+      runs-on: [ubuntu-latest, x64, small]
+      timeout-minutes: 10
+      steps:
+        - name: stress cpu
+          run: |
+            stress-ng --cpu 0 --timeout 600s
+fault_injection:
+  at: mid_job
+  action: cpu_saturate
+  params: {"duration_sec": 300}
+  recovery_expectation: job 被正确调度完成或按 timeout 终止，runner 不死锁
+assertions:
+  - type: positive
+    target: run_status
+    equals: failure
+  - type: positive
+    target: error_message
+    contains: timeout
+teardown:
+  reset: fixture

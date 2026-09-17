@@ -1,0 +1,43 @@
+---
+id: SEC-CACHE-01-001
+dimensions: ["security"]
+dimension: security
+priority: P1
+title: fork PR 保存的 cache 不得被主分支 workflow 命中
+intent_ref: INTENT-SEC-009
+test_type: workflow
+setup:
+  repo_fixture: with-fork-pr
+trigger:
+  event: fork_pr
+  as: untrusted_contributor
+workflow: |
+  name: test-fork-cache-poison
+  on:
+    pull_request:
+      branches: [main]
+  jobs:
+    test:
+      name: save cache from fork
+      runs-on: [ubuntu-latest, x64, small]
+      steps:
+        - name: checkout
+          uses: checkout
+        - name: create poison cache
+          run: |
+            mkdir -p cached
+            echo 'poison-data' > cached/data.txt
+        - name: save cache
+          uses: cache
+          with:
+            path: cached
+            key: shared-cache-key
+assertions:
+  - type: negative
+    target: run_logs
+    must_not_contain: poison-data
+  - type: positive
+    target: run_status
+    equals: completed
+teardown:
+  reset: fixture
