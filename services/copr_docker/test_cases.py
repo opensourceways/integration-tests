@@ -56,6 +56,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 
 import pytest
@@ -100,8 +101,23 @@ PASSWORD = os.environ.get("TEST_PASSWORD", "")
 ENV_API_LOGIN = os.environ.get("EUR_API_LOGIN", "")
 ENV_API_TOKEN = os.environ.get("EUR_API_TOKEN", "")
 
+# 脚本所在目录：token 缓存与调试截图均锚定此处，避免受 pytest 启动目录影响
+# （如从仓库根目录执行 pytest services/copr_docker/test_cases.py 时，
+#  相对路径会落到根目录导致缓存 token 读不到、误触发浏览器登录）
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # token 缓存文件
-AUTH_STATE_PATH = os.path.join(".auth", "eur_api_token.json")
+AUTH_STATE_PATH = os.environ.get(
+    "EUR_AUTH_STATE_PATH", os.path.join(SCRIPT_DIR, ".auth", "eur_api_token.json")
+)
+
+
+def _debug_shot(page, filename: str):
+    """截图统一落到脚本目录；无显示环境下截图失败不应影响主流程"""
+    try:
+        page.screenshot(path=os.path.join(SCRIPT_DIR, filename), full_page=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("截图 %s 失败: %s", filename, exc)
 
 # requests 配置
 TIMEOUT = int(os.environ.get("EUR_TIMEOUT", "30"))
@@ -110,7 +126,29 @@ MAX_RETRIES = int(os.environ.get("EUR_MAX_RETRIES", "2"))
 
 # Playwright 配置
 DEFAULT_TIMEOUT = 30000
-BROWSER_HEADLESS = os.environ.get("BROWSER_HEADLESS", "0") == "1"
+
+
+def _detect_headless() -> bool:
+    """决定浏览器是否以无头模式启动。
+
+    显式设置 BROWSER_HEADLESS=0/1 时以其为准；未设置时自动探测：
+    Linux 下无 DISPLAY / WAYLAND_DISPLAY（CI、容器、纯 SSH 会话）必须用无头，
+    否则 Chromium 因 "Missing X server or $DISPLAY" 直接退出。
+    """
+    explicit = os.environ.get("BROWSER_HEADLESS")
+    if explicit is not None:
+        return explicit == "1"
+    if sys.platform.startswith("linux"):
+        return not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return False
+
+
+BROWSER_HEADLESS = _detect_headless()
+# 无图形环境：人工兜底（滑块/验证码）不可能完成，提前判定
+NO_DISPLAY = (
+    sys.platform.startswith("linux")
+    and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+)
 
 # 邮箱验证码 / 人工兜底
 MAIL_CODE_TIMEOUT = int(os.environ.get("MAIL_CODE_TIMEOUT", "150"))
@@ -268,7 +306,7 @@ def await_slider_cleared(page, stage: str) -> bool:
         except Exception as exc:
             print(f"   [滑块] 自动破解模块异常，回落人工处理：{type(exc).__name__}: {exc}")
 
-    shot = f"debug_slider_{stage}.png"
+    shot = os.path.join(SCRIPT_DIR, f"debug_slider_{stage}.png")
     try:
         page.screenshot(path=shot, full_page=True)
     except Exception:
@@ -348,7 +386,7 @@ def handle_mfa_challenge(page) -> bool:
         _first_visible(page, "button:has-text('获取验证码')") or \
         _first_visible(page, "span:has-text('获取验证码')")
     if send_link is None:
-        page.screenshot(path="debug_mfa_no_send.png")
+        _debug_shot(page, "debug_mfa_no_send.png")
         pytest.fail("[FAIL] 验证码环节未找到「获取验证码」入口，截图: debug_mfa_no_send.png")
     send_link.click()
     print("   [MFA] 已点击「获取验证码」")
@@ -365,7 +403,7 @@ def handle_mfa_challenge(page) -> bool:
         code = fetch_verification_code(since_ts=request_ts, timeout=MAIL_CODE_TIMEOUT)
     except MailCodeError as exc:
         if not MFA_MANUAL_FALLBACK:
-            page.screenshot(path="debug_mfa_mail_failed.png")
+            _debug_shot(page, "debug_mfa_mail_failed.png")
             pytest.fail(f"{exc}\n   截图: debug_mfa_mail_failed.png")
         print("\a")
         print("\n" + "=" * 64)
@@ -459,7 +497,7 @@ def handle_privacy_dialog(page, timeout_sec: int = 15) -> bool:
             return True
     except Exception as exc:
         print(f"   [隐私声明] 点击失败：{exc}")
-    page.screenshot(path="debug_privacy_dialog.png")
+    _debug_shot(page, "debug_privacy_dialog.png")
     print("\a")
     print("\n" + "=" * 64)
     print("   [隐私声明] 自动处理失败。阿蓁，请在浏览器中手动滚动到底部并点击「我已阅读并同意」。")
@@ -493,7 +531,7 @@ def perform_login(page):
         _first_visible(page, "input[placeholder*='请输入']")
     password_input = _first_visible(page, "input[type='password']")
     if username_input is None or password_input is None:
-        page.screenshot(path="debug_login_page.png")
+        _debug_shot(page, "debug_login_page.png")
         pytest.fail("[FAIL] 未找到账号/密码输入框，请检查 debug_login_page.png")
 
     username_input.fill(USERNAME)
@@ -538,7 +576,7 @@ def perform_login(page):
             deadline = time.time() + 30
 
     if on_sso_page(page):
-        page.screenshot(path="debug_login_stuck.png")
+        _debug_shot(page, "debug_login_stuck.png")
         err = ""
         for sel in (".o-message", ".el-message", "[class*='error']", "[class*='tip']"):
             loc = _first_visible(page, sel)
@@ -558,11 +596,11 @@ def fetch_api_token_from_page(page) -> dict:
     page.wait_for_timeout(2000)
     pre = page.locator("pre").first
     if pre.count() == 0:
-        page.screenshot(path="debug_api_page.png")
+        _debug_shot(page, "debug_api_page.png")
         pytest.fail("[FAIL] /api/ 页面未找到 <pre> 配置块，截图: debug_api_page.png")
     creds = _parse_api_page(pre.inner_text())
     if not _creds_revealed(creds):
-        page.screenshot(path="debug_api_page.png")
+        _debug_shot(page, "debug_api_page.png")
         pytest.fail(
             "[FAIL] /api/ 页面仍显示 LOGIN_TO_REVEAL，登录态未生效。截图: debug_api_page.png"
         )
@@ -576,16 +614,34 @@ def obtain_api_token_via_browser() -> dict:
             "[FAIL] 未配置 TEST_ACCOUNT / TEST_PASSWORD，无法通过前端登录获取 API token。\n"
             "   请在 .env 中填写，或直接配置 EUR_API_LOGIN / EUR_API_TOKEN。"
         )
+    if NO_DISPLAY and MFA_MANUAL_FALLBACK:
+        print("\n[AUTH] 检测到无图形环境（Linux 且无 DISPLAY），浏览器将以无头模式运行；"
+              "滑块/验证码若需人工介入将无法完成。")
     from playwright.sync_api import sync_playwright
 
-    print("\n[AUTH] 缓存 token 不可用，拉起浏览器通过前端登录获取 API token...")
+    print(f"\n[AUTH] 缓存 token 不可用，拉起浏览器通过前端登录获取 API token"
+          f"（headless={BROWSER_HEADLESS}）...")
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=BROWSER_HEADLESS,
-            slow_mo=120,
-            args=["--no-sandbox", "--ignore-certificate-errors",
-                  "--disable-blink-features=AutomationControlled", "--window-size=1600,900"],
-        )
+        try:
+            browser = p.chromium.launch(
+                headless=BROWSER_HEADLESS,
+                slow_mo=120,
+                args=["--no-sandbox", "--disable-dev-shm-usage",
+                      "--ignore-certificate-errors",
+                      "--disable-blink-features=AutomationControlled",
+                      "--window-size=1600,900"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            pytest.fail(
+                f"[FAIL] 浏览器启动失败：{exc}\n"
+                "   无图形环境（CI / 容器 / SSH）请改用免登录方式，二选一：\n"
+                "   1) 直接注入已有凭证（推荐）：\n"
+                "        export EUR_API_LOGIN=xxx EUR_API_TOKEN=zzz\n"
+                "   2) 把本地已登录生成的 .auth/eur_api_token.json 拷到脚本同级目录，\n"
+                f"      当前查找路径：{AUTH_STATE_PATH}\n"
+                "   若确需在无图形环境跑浏览器登录：pip install playwright && "
+                "playwright install --with-deps chromium，并用 xvfb-run 包裹执行。"
+            )
         context = browser.new_context(ignore_https_errors=True,
                                       viewport={"width": 1600, "height": 900})
         context.set_default_timeout(DEFAULT_TIMEOUT)
