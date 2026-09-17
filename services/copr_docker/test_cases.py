@@ -79,6 +79,8 @@ BASE_URL = os.environ.get("EUR_BASE_URL", "https://packages.test.osinfra.cn").rs
 OIDC_LOGIN_URL = f"{BASE_URL}/oidc_login/"
 API_TOKEN_PAGE = f"{BASE_URL}/api/"
 
+EUR_HOST = re.sub(r"^https?://", "", BASE_URL).split("/")[0]
+
 # 统一认证域标识（登录成功后应离开这些域回到 EUR 业务域）。
 # 生产 EUR → id.openeuler.org；测试环境 EUR → openeuler-usercenter.test.osinfra.cn。
 # 两套登录页同为 openEuler o-design 组件，选择器完全一致，故共用一套登录逻辑。
@@ -89,10 +91,36 @@ SSO_DOMAIN_HINTS = [
     ).split(",") if h.strip()
 ]
 
+# OIDC 中转域：EUR ←→ 用户中心之间的 broker（测试环境 omapi.test.osinfra.cn）。
+# 停在这里说明重定向链未走完，既不算 SSO 登录页、也不算登录完成。
+OIDC_BROKER_HINTS = [
+    h.strip() for h in os.environ.get(
+        "EUR_OIDC_BROKER_HOSTS", "omapi.test.osinfra.cn,omapi.osinfra.cn"
+    ).split(",") if h.strip()
+]
+
 
 def on_sso_page(page) -> bool:
     """当前是否仍停留在统一认证域"""
     return any(h in page.url for h in SSO_DOMAIN_HINTS)
+
+
+def on_broker_page(page) -> bool:
+    """当前是否停在 OIDC 中转域（重定向链进行中）"""
+    return any(h in page.url for h in OIDC_BROKER_HINTS)
+
+
+def on_eur_page(page) -> bool:
+    """是否已回到 EUR 业务域（登录完成的必要条件）"""
+    return EUR_HOST in page.url and not on_sso_page(page) and not on_broker_page(page)
+
+
+def wait_redirect_settled(page, timeout_sec: int = 30) -> bool:
+    """等待重定向链走完（离开 OIDC broker）。返回是否已落到 EUR 域。"""
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline and on_broker_page(page):
+        page.wait_for_timeout(1000)
+    return on_eur_page(page)
 
 USERNAME = os.environ.get("TEST_ACCOUNT", "")
 PASSWORD = os.environ.get("TEST_PASSWORD", "")
@@ -514,9 +542,21 @@ def perform_login(page):
     page.goto(OIDC_LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(4000)
 
-    if not on_sso_page(page):
+    # 先等重定向链走完再判断：EUR → omapi(broker) → 用户中心 这条链在
+    # Linux/CI 上比本地慢，若此刻仍停在 broker，既不能当作"已登录"直接返回，
+    # 也不能当作登录页去填表单。
+    wait_redirect_settled(page)
+
+    if on_eur_page(page):
         print(f"   已处于登录态，直接跳转至: {page.url}")
         return
+    if not on_sso_page(page):
+        _debug_shot(page, "debug_login_entry.png")
+        pytest.fail(
+            f"[FAIL] 登录入口跳转异常，既未回到 EUR 也未到统一认证页: {page.url}\n"
+            "   截图: debug_login_entry.png\n"
+            f"   若为新增中转域，用 EUR_OIDC_BROKER_HOSTS 补充（当前: {OIDC_BROKER_HINTS}）"
+        )
 
     # 确保处于「账号登录」Tab
     tab = _first_visible(page, ".login-tabs .tab:has-text('账号登录')")
@@ -569,13 +609,15 @@ def perform_login(page):
     handle_privacy_dialog(page)
 
     # 等待跳回业务域（期间若再弹隐私声明 / 滑块也一并处理）
+    # 判定条件为"已回到 EUR 域"，而非"已离开 SSO 域"——后者在停留于
+    # omapi 中转域时会误判成功，导致后续 /api/ 页面无会话（LOGIN_TO_REVEAL）。
     deadline = time.time() + 45
-    while time.time() < deadline and on_sso_page(page):
+    while time.time() < deadline and not on_eur_page(page):
         page.wait_for_timeout(1500)
         if handle_privacy_dialog(page) or await_slider_cleared(page, "登录等待"):
             deadline = time.time() + 30
 
-    if on_sso_page(page):
+    if not on_eur_page(page):
         _debug_shot(page, "debug_login_stuck.png")
         err = ""
         for sel in (".o-message", ".el-message", "[class*='error']", "[class*='tip']"):
@@ -583,28 +625,48 @@ def perform_login(page):
             if loc is not None:
                 err = loc.inner_text().strip()
                 break
+        stage = "统一认证页" if on_sso_page(page) else (
+            "OIDC 中转域" if on_broker_page(page) else "未知域")
         pytest.fail(
-            f"[FAIL] 登录未完成，仍停留在统一认证页面: {page.url}\n"
+            f"[FAIL] 登录未完成，仍停留在{stage}: {page.url}\n"
             f"   页面提示: {err or '(无)'}\n   截图: debug_login_stuck.png"
         )
     print(f"   登录成功，当前页面: {page.url}")
 
 
 def fetch_api_token_from_page(page) -> dict:
-    """访问 /api/ 页面，解析 <pre> 块中的 login / username / token"""
-    page.goto(API_TOKEN_PAGE, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(2000)
-    pre = page.locator("pre").first
-    if pre.count() == 0:
-        _debug_shot(page, "debug_api_page.png")
-        pytest.fail("[FAIL] /api/ 页面未找到 <pre> 配置块，截图: debug_api_page.png")
-    creds = _parse_api_page(pre.inner_text())
-    if not _creds_revealed(creds):
-        _debug_shot(page, "debug_api_page.png")
-        pytest.fail(
-            "[FAIL] /api/ 页面仍显示 LOGIN_TO_REVEAL，登录态未生效。截图: debug_api_page.png"
-        )
-    return creds
+    """访问 /api/ 页面，解析 <pre> 块中的 login / username / token
+
+    会话 cookie 在 OIDC 回调后可能略有延迟，故最多重试 3 轮。
+    """
+    creds = {}
+    for attempt in range(1, 4):
+        page.goto(API_TOKEN_PAGE, wait_until="domcontentloaded", timeout=60000)
+        wait_redirect_settled(page)
+        page.wait_for_timeout(2000)
+        pre = page.locator("pre").first
+        if pre.count() == 0:
+            _debug_shot(page, "debug_api_page.png")
+            pytest.fail("[FAIL] /api/ 页面未找到 <pre> 配置块，截图: debug_api_page.png")
+        creds = _parse_api_page(pre.inner_text())
+        if _creds_revealed(creds):
+            return creds
+        print(f"   [AUTH] 第 {attempt}/3 次读取 /api/ 仍为 LOGIN_TO_REVEAL，等待会话生效...")
+        page.wait_for_timeout(3000)
+
+    _debug_shot(page, "debug_api_page.png")
+    try:
+        cookie_names = sorted({c["name"] for c in page.context.cookies()})
+    except Exception:  # noqa: BLE001
+        cookie_names = ["(读取失败)"]
+    pytest.fail(
+        "[FAIL] /api/ 页面仍显示 LOGIN_TO_REVEAL，EUR 会话未建立。\n"
+        f"   当前 URL: {page.url}\n"
+        f"   当前 cookie: {cookie_names}\n"
+        "   截图: debug_api_page.png\n"
+        "   常见原因：OIDC 回调未完成（重定向链被提前打断）、账号在该环境无权限、\n"
+        "   或无头浏览器被风控拦截。可先用 EUR_API_LOGIN / EUR_API_TOKEN 直接注入凭证绕过登录。"
+    )
 
 
 def obtain_api_token_via_browser() -> dict:
@@ -642,8 +704,18 @@ def obtain_api_token_via_browser() -> dict:
                 "   若确需在无图形环境跑浏览器登录：pip install playwright && "
                 "playwright install --with-deps chromium，并用 xvfb-run 包裹执行。"
             )
-        context = browser.new_context(ignore_https_errors=True,
-                                      viewport={"width": 1600, "height": 900})
+        # 无头 Chromium 默认 UA 含 HeadlessChrome，易被统一认证风控拦截，
+        # 统一伪装为常规 Chrome UA（可用 EUR_USER_AGENT 覆盖）。
+        ctx_args = {"ignore_https_errors": True,
+                    "viewport": {"width": 1600, "height": 900},
+                    "locale": "zh-CN"}
+        ua = os.environ.get("EUR_USER_AGENT") or (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/140.0.0.0 Safari/537.36" if BROWSER_HEADLESS else ""
+        )
+        if ua:
+            ctx_args["user_agent"] = ua
+        context = browser.new_context(**ctx_args)
         context.set_default_timeout(DEFAULT_TIMEOUT)
         page = context.new_page()
         try:
