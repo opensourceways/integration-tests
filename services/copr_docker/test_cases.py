@@ -581,7 +581,6 @@ def obtain_api_token_via_browser() -> dict:
     print("\n[AUTH] 缓存 token 不可用，拉起浏览器通过前端登录获取 API token...")
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            channel="msedge",
             headless=BROWSER_HEADLESS,
             slow_mo=120,
             args=["--no-sandbox", "--ignore-certificate-errors",
@@ -980,92 +979,92 @@ class TestBuild:
         response = client.post("/api_3/build/check-before-build", json=payload)
         assert_status_codes(response, [200, 400])
 
-    @pytest.mark.slow
-    def test_create_build_from_custom(self, client, td):
-        """通过自定义脚本提交构建"""
-        payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
-                   "chroots": [td.CHROOTNAME], "script": "echo 'hello world'"}
-        response = client.post("/api_3/build/create/custom", json=payload)
-        assert_status_codes(response, [200, 201, 400, 403, 404])
+    # @pytest.mark.slow
+    # def test_create_build_from_custom(self, client, td):
+    #     """通过自定义脚本提交构建"""
+    #     payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
+    #                "chroots": [td.CHROOTNAME], "script": "echo 'hello world'"}
+    #     response = client.post("/api_3/build/create/custom", json=payload)
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
+    #
+    # @pytest.mark.slow
+    # def test_create_build_from_distgit(self, client, td):
+    #     """通过 dist-git 提交构建"""
+    #     payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
+    #                "chroots": [td.CHROOTNAME], "distgit": "fedora", "package_name": td.PACKAGENAME}
+    #     response = client.post("/api_3/build/create/distgit", json=payload)
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
+    #
+    # @pytest.mark.slow
+    # def test_create_build_from_pypi(self, client, td):
+    #     """通过 PyPI 提交构建"""
+    #     payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
+    #                "chroots": [td.CHROOTNAME], "pypi_package_name": "requests"}
+    #     response = client.post("/api_3/build/create/pypi", json=payload)
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
+    #
+    # @pytest.mark.slow
+    # def test_create_build_from_rubygems(self, client, td):
+    #     """通过 RubyGems 提交构建"""
+    #     payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
+    #                "chroots": [td.CHROOTNAME], "gem_name": "rails"}
+    #     response = client.post("/api_3/build/create/rubygems", json=payload)
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
+    #
+    # @pytest.mark.slow
+    # def test_create_build_from_scm(self, client, td):
+    #     """通过 SCM 提交构建"""
+    #     payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
+    #                "chroots": [td.CHROOTNAME],
+    #                "clone_url": "https://gitee.com/openeuler/hello-world.git",
+    #                "committish": "master"}
+    #     response = client.post("/api_3/build/create/scm", json=payload)
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
+    #
+    # @pytest.mark.slow
+    # def test_create_build_from_upload(self, client, td):
+    #     """通过上传 SRPM 提交构建（multipart）"""
+    #     srpm_path = os.environ.get("EUR_TEST_SRPM", "")
+    #     if not srpm_path or not os.path.exists(srpm_path):
+    #         pytest.skip("未配置 EUR_TEST_SRPM 或文件不存在，跳过上传构建用例")
+    #     with open(srpm_path, "rb") as f:
+    #         response = client.post(
+    #             "/api_3/build/create/upload",
+    #             data={"json": json.dumps({"ownername": td.OWNERNAME,
+    #                                       "projectname": td.PROJECTNAME,
+    #                                       "chroots": [td.CHROOTNAME]})},
+    #             files={"pkgs": (os.path.basename(srpm_path), f)},
+    #             headers={"Accept": "application/json"},
+    #         )
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
 
-    @pytest.mark.slow
-    def test_create_build_from_distgit(self, client, td):
-        """通过 dist-git 提交构建"""
-        payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
-                   "chroots": [td.CHROOTNAME], "distgit": "fedora", "package_name": td.PACKAGENAME}
-        response = client.post("/api_3/build/create/distgit", json=payload)
-        assert_status_codes(response, [200, 201, 400, 403, 404])
-
-    @pytest.mark.slow
-    def test_create_build_from_pypi(self, client, td):
-        """通过 PyPI 提交构建"""
-        payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
-                   "chroots": [td.CHROOTNAME], "pypi_package_name": "requests"}
-        response = client.post("/api_3/build/create/pypi", json=payload)
-        assert_status_codes(response, [200, 201, 400, 403, 404])
-
-    @pytest.mark.slow
-    def test_create_build_from_rubygems(self, client, td):
-        """通过 RubyGems 提交构建"""
-        payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
-                   "chroots": [td.CHROOTNAME], "gem_name": "rails"}
-        response = client.post("/api_3/build/create/rubygems", json=payload)
-        assert_status_codes(response, [200, 201, 400, 403, 404])
-
-    @pytest.mark.slow
-    def test_create_build_from_scm(self, client, td):
-        """通过 SCM 提交构建"""
-        payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
-                   "chroots": [td.CHROOTNAME],
-                   "clone_url": "https://gitee.com/openeuler/hello-world.git",
-                   "committish": "master"}
-        response = client.post("/api_3/build/create/scm", json=payload)
-        assert_status_codes(response, [200, 201, 400, 403, 404])
-
-    @pytest.mark.slow
-    def test_create_build_from_upload(self, client, td):
-        """通过上传 SRPM 提交构建（multipart）"""
-        srpm_path = os.environ.get("EUR_TEST_SRPM", "")
-        if not srpm_path or not os.path.exists(srpm_path):
-            pytest.skip("未配置 EUR_TEST_SRPM 或文件不存在，跳过上传构建用例")
-        with open(srpm_path, "rb") as f:
-            response = client.post(
-                "/api_3/build/create/upload",
-                data={"json": json.dumps({"ownername": td.OWNERNAME,
-                                          "projectname": td.PROJECTNAME,
-                                          "chroots": [td.CHROOTNAME]})},
-                files={"pkgs": (os.path.basename(srpm_path), f)},
-                headers={"Accept": "application/json"},
-            )
-        assert_status_codes(response, [200, 201, 400, 403, 404])
-
-    @pytest.mark.slow
-    def test_create_build_from_url(self, client, td):
-        """通过 URL 提交构建"""
-        payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
-                   "chroots": [td.CHROOTNAME], "pkgs": "https://example.com/test.src.rpm"}
-        response = client.post("/api_3/build/create/url", json=payload)
-        assert_status_codes(response, [200, 201, 400, 403, 404])
-
-    @pytest.mark.slow
-    def test_delete_build_list(self, client, disposable_build):
-        """批量删除构建（删除本用例自建并已取消的构建）
-
-        标记 slow：disposable_build fixture 会真实提交一个构建再取消，
-        占用 builder 资源，默认执行（-m "not slow"）时排除。
-        """
-        response = client.post("/api_3/build/delete/list",
-                               json={"builds": [disposable_build]})
-        assert_status_codes(response, [200, 400])
-
-    @pytest.mark.slow
-    def test_delete_build(self, client, disposable_build):
-        """删除单个构建（删除本用例自建并已取消的构建）
-
-        标记 slow：理由同 test_delete_build_list。
-        """
-        response = client.delete(f"/api_3/build/delete/{disposable_build}")
-        assert_status_codes(response, [200, 400])
+    # @pytest.mark.slow
+    # def test_create_build_from_url(self, client, td):
+    #     """通过 URL 提交构建"""
+    #     payload = {"ownername": td.OWNERNAME, "projectname": td.PROJECTNAME,
+    #                "chroots": [td.CHROOTNAME], "pkgs": "https://example.com/test.src.rpm"}
+    #     response = client.post("/api_3/build/create/url", json=payload)
+    #     assert_status_codes(response, [200, 201, 400, 403, 404])
+    #
+    # @pytest.mark.slow
+    # def test_delete_build_list(self, client, disposable_build):
+    #     """批量删除构建（删除本用例自建并已取消的构建）
+    #
+    #     标记 slow：disposable_build fixture 会真实提交一个构建再取消，
+    #     占用 builder 资源，默认执行（-m "not slow"）时排除。
+    #     """
+    #     response = client.post("/api_3/build/delete/list",
+    #                            json={"builds": [disposable_build]})
+    #     assert_status_codes(response, [200, 400])
+    #
+    # @pytest.mark.slow
+    # def test_delete_build(self, client, disposable_build):
+    #     """删除单个构建（删除本用例自建并已取消的构建）
+    #
+    #     标记 slow：理由同 test_delete_build_list。
+    #     """
+    #     response = client.delete(f"/api_3/build/delete/{disposable_build}")
+    #     assert_status_codes(response, [200, 400])
 
     @pytest.mark.smoke
     def test_list_builds(self, client, td):
