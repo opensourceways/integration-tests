@@ -91,8 +91,9 @@ SSO_DOMAIN_HINTS = [
     ).split(",") if h.strip()
 ]
 
-# OIDC 中转域：EUR ←→ 用户中心之间的 broker（测试环境 omapi.test.osinfra.cn）。
-# 停在这里说明重定向链未走完，既不算 SSO 登录页、也不算登录完成。
+# OIDC 身份提供方（OP）域：omapi.test.osinfra.cn/oneid/oidc 即 issuer 本体，
+# authorization / token / userinfo 三个端点都在这里（见其 openid-configuration）。
+# 它只做 302 不渲染内容，浏览器停在这里说明下一跳（登录 UI 域）没落地。
 OIDC_BROKER_HINTS = [
     h.strip() for h in os.environ.get(
         "EUR_OIDC_BROKER_HOSTS", "omapi.test.osinfra.cn,omapi.osinfra.cn"
@@ -103,6 +104,88 @@ OIDC_BROKER_HINTS = [
 def on_sso_page(page) -> bool:
     """当前是否仍停留在统一认证域"""
     return any(h in page.url for h in SSO_DOMAIN_HINTS)
+
+
+# 网络层失败记录：Playwright 的 page.url 在导航失败时保留在最后一个成功提交的
+# 页面上，因此"停在 omapi"这个现象本身不含任何原因信息。真正的原因（DNS 解析
+# 失败 / 连接超时 / 证书错误 / 被代理拦截）只出现在 requestfailed 事件里。
+_NET_FAILURES: list = []
+
+
+def _track_network(page):
+    """挂载网络监听，记录失败请求与 4xx/5xx 响应，供失败时打印真实原因"""
+    _NET_FAILURES.clear()
+
+    def _on_failed(request):
+        _NET_FAILURES.append({
+            "kind": "requestfailed",
+            "doc": request.resource_type == "document",
+            "url": request.url,
+            "reason": (request.failure or "unknown"),
+        })
+
+    def _on_response(response):
+        if response.status >= 400 and response.request.resource_type == "document":
+            _NET_FAILURES.append({
+                "kind": "http",
+                "doc": True,
+                "url": response.url,
+                "reason": f"HTTP {response.status}",
+            })
+
+    page.on("requestfailed", _on_failed)
+    page.on("response", _on_response)
+
+
+def _net_failure_report() -> str:
+    """把记录到的网络失败整理成可读文本；文档类请求优先展示"""
+    if not _NET_FAILURES:
+        return "   网络层无失败记录（DNS / 连接 / 证书均正常，问题不在网络可达性）"
+    docs = [f for f in _NET_FAILURES if f["doc"]]
+    others = [f for f in _NET_FAILURES if not f["doc"]]
+    lines = []
+    if docs:
+        lines.append("   页面导航失败（关键）:")
+        for f in docs[-6:]:
+            lines.append(f"     - {f['reason']}  <- {f['url'][:140]}")
+    if others:
+        lines.append(f"   其他资源失败 {len(others)} 条，最后 5 条:")
+        for f in others[-5:]:
+            lines.append(f"     - {f['reason']}  <- {f['url'][:140]}")
+    return "\n".join(lines)
+
+
+def login_form_ready(page) -> bool:
+    """
+    登录页是否已渲染出可交互表单。
+    统一认证登录页是 Vue SPA（首屏仅 549 字节的 #app 空壳，表单由 JS 渲染），
+    因此不能只看 URL 在不在 SSO 域，必须确认表单真的出来了。
+    """
+    try:
+        if page.locator("input[type='password']").count() == 0:
+            return False
+        pwd = page.locator("input[type='password']").first
+        return pwd.is_visible()
+    except Exception:  # noqa: BLE001  导航进行中 DOM 会瞬时不可用
+        return False
+
+
+def wait_login_entry(page, timeout_sec: int = 60) -> str:
+    """
+    轮询等待登录入口落地，返回状态：
+      "eur"    - 已带登录态回到 EUR 业务域，无需填表单
+      "form"   - 登录表单已渲染，可以填账密
+      "stuck"  - 超时未落地（此时 _NET_FAILURES 里通常有真实原因）
+    按页面内容判定而非按域名判定，避免 SPA 渲染慢被误判。
+    """
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        if on_eur_page(page):
+            return "eur"
+        if login_form_ready(page):
+            return "form"
+        page.wait_for_timeout(1000)
+    return "stuck"
 
 
 def on_broker_page(page) -> bool:
@@ -542,21 +625,39 @@ def perform_login(page):
     page.goto(OIDC_LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(4000)
 
-    # 先等重定向链走完再判断：EUR → omapi(broker) → 用户中心 这条链在
-    # Linux/CI 上比本地慢，若此刻仍停在 broker，既不能当作"已登录"直接返回，
-    # 也不能当作登录页去填表单。
-    wait_redirect_settled(page)
+    # 跳转链：EUR(RP) → omapi/oneid/oidc/authorize(OP) → 用户中心登录 UI。
+    # 按"表单是否渲染出来"判定，而不是按域名——SPA 在 CI 上渲染慢，
+    # 且停在 omapi 时域名判定给不出任何原因信息。
+    stage = wait_login_entry(page)
 
-    if on_eur_page(page):
+    if stage == "eur":
         print(f"   已处于登录态，直接跳转至: {page.url}")
         return
-    if not on_sso_page(page):
+
+    if stage == "stuck":
         _debug_shot(page, "debug_login_entry.png")
+        try:
+            title = page.title()
+            body_len = len(page.content() or "")
+        except Exception as exc:  # noqa: BLE001
+            title, body_len = f"<取不到: {exc}>", -1
+        where = ("OP 域 omapi（纯 302 不渲染内容，停在这里说明下一跳未落地）"
+                 if on_broker_page(page) else
+                 "统一认证域（页面在但表单未渲染出来）" if on_sso_page(page) else
+                 "未知域")
         pytest.fail(
-            f"[FAIL] 登录入口跳转异常，既未回到 EUR 也未到统一认证页: {page.url}\n"
+            f"[FAIL] 登录页未就绪，等待 60s 后仍未出现登录表单。\n"
+            f"   当前位置: {where}\n"
+            f"   当前 URL: {page.url}\n"
+            f"   页面标题: {title!r}   HTML 长度: {body_len}\n"
+            f"{_net_failure_report()}\n"
             "   截图: debug_login_entry.png\n"
-            f"   若为新增中转域，用 EUR_OIDC_BROKER_HOSTS 补充（当前: {OIDC_BROKER_HINTS}）"
+            "   若上面报了 ERR_NAME_NOT_RESOLVED / ERR_CONNECTION_TIMED_OUT，"
+            "即为该域未放通，需网络侧处理；\n"
+            "   临时绕过：export EUR_API_LOGIN=xxx EUR_API_TOKEN=zzz"
         )
+
+    print(f"   登录表单已就绪: {page.url}")
 
     # 确保处于「账号登录」Tab
     tab = _first_visible(page, ".login-tabs .tab:has-text('账号登录')")
@@ -626,10 +727,12 @@ def perform_login(page):
                 err = loc.inner_text().strip()
                 break
         stage = "统一认证页" if on_sso_page(page) else (
-            "OIDC 中转域" if on_broker_page(page) else "未知域")
+            "OIDC OP 域(omapi)" if on_broker_page(page) else "未知域")
         pytest.fail(
             f"[FAIL] 登录未完成，仍停留在{stage}: {page.url}\n"
-            f"   页面提示: {err or '(无)'}\n   截图: debug_login_stuck.png"
+            f"   页面提示: {err or '(无)'}\n"
+            f"{_net_failure_report()}\n"
+            "   截图: debug_login_stuck.png"
         )
     print(f"   登录成功，当前页面: {page.url}")
 
@@ -718,6 +821,7 @@ def obtain_api_token_via_browser() -> dict:
         context = browser.new_context(**ctx_args)
         context.set_default_timeout(DEFAULT_TIMEOUT)
         page = context.new_page()
+        _track_network(page)
         try:
             perform_login(page)
             creds = fetch_api_token_from_page(page)
