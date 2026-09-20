@@ -30,7 +30,7 @@ RUN yum install -y python3 python3-pip git ca-certificates tzdata && \
 WORKDIR /app
 
 # 依赖单独先装：源码变更不失效这层缓存
-RUN mv gitcode_services /app/gitcode_services
+COPY gitcode_services /app/gitcode_services
 RUN pip3 install --no-cache-dir -r /app/gitcode_services/requirements.txt
 
 # Chromium + 系统依赖。openEuler 非 playwright 官方支持发行版，
