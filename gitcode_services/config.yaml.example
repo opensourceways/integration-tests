@@ -17,9 +17,9 @@ gitcode:
   # 浏览器登录后的 Cookie 串。缺失时 UI 用例记为 ENV_ERROR，
   # 且可能把执行覆盖率压到 60% 以下触发 INCONCLUSIVE（退出码 2）
   #
-  # 获取方式 1（自动，推荐）：填好下方 username / password，然后运行
-  #   python phase02/scripts/login_helper.py
-  #   脚本会自动登录并把 Cookie 回写到本文件的 gitcode.cookie
+  # 获取方式 1（自动，推荐）：填好下方 username / password 即可。
+  #   run_daily.sh 第 0 步检测到本项为空时会自动登录并回写；
+  #   也可手动触发：python phase02/scripts/login_helper.py
   # 获取方式 2（命令行）：
   #   python phase02/scripts/login_helper.py <username> <password>
   # 获取方式 3（手动）：浏览器登录 gitcode.com → 开发者工具 →

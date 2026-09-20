@@ -80,6 +80,37 @@ if [ -f "phase02/reports/latest.txt" ]; then
 fi
 echo ""
 
+# 0. 登录态自检：cookie 为空时自动登录并回写 config.yaml
+#    UI 用例依赖 GITCODE_COOKIE；缺失时公开页仍可跑，但 /settings/* 与
+#    /dashboard/notifications 等需登录态的页面会判不可测试，压低执行覆盖率。
+#    登录失败不中断整轮（可能触发验证码/登录保护），退回匿名继续，
+#    由覆盖率门禁给结论。
+COOKIE_STATE="config.yaml 已有"
+if [ -z "${GITCODE_COOKIE:-}" ] && [ -n "${CONFIG_FILE:-}" ] \
+   && ! $PYTHON -c "
+import sys
+sys.path.insert(0, 'phase02/scripts')
+import config_loader as c
+sys.exit(0 if (c.get('gitcode.cookie') or '').strip() else 1)
+" 2>/dev/null; then
+    echo "登录态       : config.yaml 的 gitcode.cookie 为空，尝试自动登录..."
+    set +e
+    $PYTHON phase02/scripts/login_helper.py 2>&1 | sed 's/^/             /'
+    LOGIN_CODE=${PIPESTATUS[0]}
+    set -e
+    if [ "$LOGIN_CODE" -eq 0 ]; then
+        COOKIE_STATE="自动登录获取"
+    else
+        COOKIE_STATE="无（自动登录失败，UI 私有页将判不可测试）"
+        echo "警告: 自动登录失败（退出码 $LOGIN_CODE），退回匿名执行"
+        echo "      可手动获取 Cookie: python phase02/scripts/login_helper.py <账号> <密码>"
+    fi
+elif [ -n "${GITCODE_COOKIE:-}" ]; then
+    COOKIE_STATE="环境变量提供"
+fi
+echo "登录态       : $COOKIE_STATE"
+echo ""
+
 # 1. Schema 校验 + 按 test_type 分流（workflow/api/ui/git 各一条队列）
 echo "[1/8] Schema 校验与分流..."
 $PYTHON phase02/scripts/schema_check_ext.py "$CASE_SET_TAG" "$RUN_ID" --src-dir "$CASE_SET"
