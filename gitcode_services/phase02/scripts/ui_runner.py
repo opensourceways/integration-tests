@@ -25,6 +25,20 @@ selector 直接透传给 Playwright，因此 `:visible`、`:has-text()`、
 """
 import os
 import re
+import pathlib
+
+# 自动加载 .env（优先级：环境变量 > .env 文件）
+_env_path = pathlib.Path(__file__).parent.parent.parent / ".env"
+if _env_path.exists() and not os.environ.get("_UI_RUNNER_ENV_LOADED"):
+    with open(_env_path, encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                _k = _k.strip()
+                if _k and _k not in os.environ:  # 环境变量优先
+                    os.environ[_k] = _v.strip()
+    os.environ["_UI_RUNNER_ENV_LOADED"] = "1"
 
 HEADLESS = os.environ.get("UI_HEADLESS", "1") != "0"
 ACTION_TIMEOUT = int(os.environ.get("UI_ACTION_TIMEOUT", 15000))
