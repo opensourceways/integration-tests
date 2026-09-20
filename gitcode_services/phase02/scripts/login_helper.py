@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """login_helper.py — 自动登录 GitCode 获取 Cookie（**本包独有**）
 
-用法 1（从 .env 读账密）：
+用法 1（从 config.yaml 读账密）：
   python phase02/scripts/login_helper.py
 
-  从 .env 读取 GITCODE_USERNAME 和 GITCODE_PASSWORD，登录后将 Cookie
-  写回 .env 的 GITCODE_COOKIE（原地更新，保留其他配置）
+  从 config.yaml 读取 gitcode.username 和 gitcode.password，登录后将 Cookie
+  写回 config.yaml 的 gitcode.cookie（原地更新，保留注释与其他配置）
 
 用法 2（命令行传参）：
   python phase02/scripts/login_helper.py <username> <password>
 
-  成功时打印 Cookie 串到 stdout，需手动复制到 .env
+  成功时打印 Cookie 串到 stdout，需手动复制到 config.yaml 的 gitcode.cookie
 
-环境变量：
-  GITCODE_USERNAME   登录用户名/邮箱（用法 1 必填）
-  GITCODE_PASSWORD   登录密码（用法 1 必填）
-  UI_HEADLESS=0      有头模式看登录过程（默认 1 headless）
-  LOGIN_TIMEOUT      单步超时毫秒（默认 30000）
+配置项（config.yaml，环境变量可覆盖）：
+  gitcode.username   登录用户名/邮箱（用法 1 必填）
+  gitcode.password   登录密码（用法 1 必填）
+  ui.headless: false 有头模式看登录过程（默认 true headless）
+  runtime.login_timeout  单步超时毫秒（默认 30000）
   LOGIN_AGREE_DATA_SHARING=1
                      额外勾选「将账号/组织/仓库信息提供给 AtomGit 数据共享」。
                      这是把数据授权给第三方，默认不勾。
@@ -34,7 +34,10 @@
 import os
 import sys
 import time
-import re
+
+# 自动加载 config.yaml（优先级：环境变量 > config.yaml）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config_loader  # noqa: E402
 
 
 def login_and_get_cookie(username, password, headless=False, timeout=30000):
@@ -229,75 +232,13 @@ def cookies_to_string(cookies):
     return "; ".join(f"{c['name']}={c['value']}" for c in cookies)
 
 
-def load_dotenv(path=".env"):
-    """简易 .env 加载器，返回 dict。"""
-    env = {}
-    if not os.path.exists(path):
-        return env
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            env[k.strip()] = v.strip()
-    return env
-
-
-def update_dotenv(path, key, value):
-    """原地更新 .env 文件的指定 key=value，保留注释与其他配置。
-
-    如果 key 已存在则替换该行，不存在则追加到文件末尾。
-    """
-    if not os.path.exists(path):
-        # 不存在则创建
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(f"{key}={value}\n")
-        return
-
-    lines = []
-    updated = False
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            # 匹配 key= 开头的行（忽略前后空白）
-            if re.match(rf"^\s*{re.escape(key)}\s*=", line):
-                lines.append(f"{key}={value}\n")
-                updated = True
-            else:
-                lines.append(line)
-
-    if not updated:
-        # key 不存在，追加
-        lines.append(f"\n{key}={value}\n")
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
-
-
-def find_dotenv():
-    """查找项目根目录的 .env 文件。
-
-    优先级：当前目录 → 脚本所在目录的上两级（项目根）
-    """
-    # 1. 当前工作目录
-    if os.path.exists(".env"):
-        return ".env"
-
-    # 2. 脚本在 phase02/scripts/，项目根在 ../../
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    root = os.path.dirname(os.path.dirname(script_dir))
-    candidate = os.path.join(root, ".env")
-    if os.path.exists(candidate):
-        return candidate
-
-    return ".env"  # 兜底，不存在时让后续逻辑报错或创建
+def find_config():
+    """定位 config.yaml（当前工作目录 → 包根），未找到返回 None。"""
+    return config_loader.find_config()
 
 
 def main():
-    dotenv_path = find_dotenv()
+    config_file = find_config()
 
     # 优先从命令行读参数
     if len(sys.argv) >= 3:
@@ -305,22 +246,21 @@ def main():
         password = sys.argv[2]
         update_env = False
     else:
-        # 从 .env 或环境变量读
-        env = load_dotenv(dotenv_path)
-        username = env.get("GITCODE_USERNAME") or os.environ.get("GITCODE_USERNAME")
-        password = env.get("GITCODE_PASSWORD") or os.environ.get("GITCODE_PASSWORD")
+        # 从 config.yaml 或环境变量读（config_loader 已把前者注入 os.environ）
+        username = os.environ.get("GITCODE_USERNAME")
+        password = os.environ.get("GITCODE_PASSWORD")
 
         if not username or not password:
             print("错误: 未提供账密", file=sys.stderr)
-            print(f"\n当前查找 .env 路径: {os.path.abspath(dotenv_path)}", file=sys.stderr)
-            print("\n用法 1（从 .env）：", file=sys.stderr)
-            print("  在 .env 文件中设置 GITCODE_USERNAME 和 GITCODE_PASSWORD", file=sys.stderr)
+            print(f"\n当前查找 config.yaml 路径: {config_file or '未找到'}", file=sys.stderr)
+            print("\n用法 1（从 config.yaml）：", file=sys.stderr)
+            print("  在 config.yaml 的 gitcode 节设置 username 和 password", file=sys.stderr)
             print("  然后运行: python phase02/scripts/login_helper.py", file=sys.stderr)
             print("\n用法 2（命令行）：", file=sys.stderr)
             print("  python phase02/scripts/login_helper.py <username> <password>", file=sys.stderr)
             sys.exit(2)
 
-        update_env = True  # 从 .env 读的，登录成功后写回
+        update_env = bool(config_file)  # 有配置文件时，登录成功后回写
 
     headless = os.environ.get("UI_HEADLESS", "1") != "0"
     timeout = int(os.environ.get("LOGIN_TIMEOUT", 30000))
@@ -331,15 +271,15 @@ def main():
         cookie_str = cookies_to_string(cookies)
 
         if update_env:
-            # 写回 .env
-            update_dotenv(dotenv_path, "GITCODE_COOKIE", cookie_str)
+            # 回写 config.yaml 的 gitcode.cookie
+            config_loader.set_value("gitcode", "cookie", cookie_str, path=config_file)
             print(f"\n✓ 登录成功，获取 {len(cookies)} 个 cookie", file=sys.stderr)
-            print(f"✓ 已更新 {os.path.abspath(dotenv_path)} 的 GITCODE_COOKIE", file=sys.stderr)
+            print(f"✓ 已更新 {config_file} 的 gitcode.cookie", file=sys.stderr)
         else:
             # 命令行模式，打印到 stdout
             print(cookie_str)
             print(f"\n✓ 登录成功，获取 {len(cookies)} 个 cookie", file=sys.stderr)
-            print(f"✓ 请将上方 Cookie 串复制到 .env 文件的 GITCODE_COOKIE=", file=sys.stderr)
+            print("✓ 请将上方 Cookie 串复制到 config.yaml 的 gitcode.cookie", file=sys.stderr)
 
         sys.exit(0)
 

@@ -21,7 +21,7 @@ gitcode_services/
 ├── docker-compose.yml   一条命令跑全量
 ├── run_daily.sh         每日调度入口（回归对比 + 门禁退出码）
 ├── sync-cases.sh        从上游同步用例 + 引擎 / 检查漂移
-├── .env.example         凭证模板
+├── config.yaml.example  配置模板（凭证 + 调参，分节 YAML）
 ├── Jenkinsfile          Jenkins 流水线
 └── JENKINS-SETUP.md     Jenkins 配置手册
 ```
@@ -42,7 +42,7 @@ gitcode_services/
 
 ```bash
 cd gitcode_services
-cp .env.example .env          # 首次：填 GITCODE_ACCESS_TOKEN / GITCODE_COOKIE
+cp config.yaml.example config.yaml   # 首次：填 gitcode.access_token / gitcode.cookie
 docker compose build
 docker compose run --rm harness                    # 全量 249 条
 docker compose run --rm harness cases/yaml nightly # 指定用例集与 run 前缀
@@ -53,7 +53,8 @@ docker compose run --rm harness cases/yaml nightly # 指定用例集与 run 前�
 ```bash
 cd gitcode_services
 docker build -t gitcode-test-harness:latest .
-docker run --rm --shm-size=1gb --env-file .env \
+docker run --rm --shm-size=1gb \
+  -v "$(pwd)/config.yaml:/app/config.yaml:ro" \
   -v "$(pwd)/phase02/runs:/app/phase02/runs" \
   -v "$(pwd)/phase02/reports:/app/phase02/reports" \
   gitcode-test-harness:latest
@@ -67,7 +68,7 @@ docker run --rm --shm-size=1gb --env-file .env \
 cd gitcode_services
 pip install -r requirements.txt
 playwright install --with-deps chromium
-cp .env.example .env && vi .env
+cp config.yaml.example config.yaml && vi config.yaml
 ./run_daily.sh                        # 默认 cases/yaml 全量
 ./run_daily.sh cases/yaml nightly
 ```
@@ -76,6 +77,34 @@ cp .env.example .env && vi .env
 
 Job → Pipeline script from SCM → **Script Path = `gitcode_services/Jenkinsfile`**。
 凭证与 agent 前置条件见 [JENKINS-SETUP.md](JENKINS-SETUP.md)。
+
+## 配置：config.yaml
+
+全部凭证与调参集中在包根的 `config.yaml`（从 `config.yaml.example` 复制）。
+分节 YAML，由 `phase02/scripts/config_loader.py` 解析后注入 `os.environ`。
+
+**优先级：真实环境变量 > config.yaml**。因此 CI 里 `API_ALLOW_WRITE=0 ./run_daily.sh`
+或 `docker run -e UI_HEADLESS=0` 始终能覆盖文件里的值。
+
+节名 + 键名 → 环境变量名的映射：
+
+| config.yaml | 环境变量 |
+|---|---|
+| `gitcode.access_token` / `gitcode.cookie` / `gitcode.owner` … | `GITCODE_ACCESS_TOKEN` / `GITCODE_COOKIE` / `GITCODE_OWNER` … |
+| `phase02.case_timeout` / `phase02.poll_interval` | `PHASE02_CASE_TIMEOUT` / `PHASE02_POLL_INTERVAL` |
+| `api.case_timeout` / `api.allow_write` / `api.allow_unsafe_write` … | `API_CASE_TIMEOUT` / `API_ALLOW_WRITE` / `API_ALLOW_UNSAFE_WRITE` … |
+| `ui.headless` / `ui.nav_timeout` … | `UI_HEADLESS` / `UI_NAV_TIMEOUT` … |
+| `git.allow_push` / `git.case_timeout` | `GIT_ALLOW_PUSH` / `GIT_CASE_TIMEOUT` |
+| `auth.pat_token` | `PAT_TOKEN` |
+| `gate.min_execution_coverage` | `MIN_EXECUTION_COVERAGE` |
+| `runtime.tz` / `runtime.login_timeout` | `TZ` / `LOGIN_TIMEOUT` |
+| `email.*` | **不注入环境变量** |
+
+布尔值 `true`/`false` 注入为 `"1"`/`"0"`，与既有 `!= "0"` 判断兼容。
+`email` 节刻意不进环境变量：`git_runner.py` 会把整份 `os.environ` 传给 git 子进程，
+SMTP 授权码不应随之外泄，由 `email_sender.py` 结构化读取。
+
+用 `CONFIG_FILE=/path/to/other.yaml` 可指定非默认位置的配置文件。
 
 ## 退出码 = 门禁结论
 
@@ -199,14 +228,14 @@ GitCode 是 SPA：`domcontentloaded` 时 `body` 已存在但内容未渲染，�
 **获取 Cookie（供 `GITCODE_COOKIE`）**：
 
 ```bash
-# 方式 1：自动登录（推荐，从 .env 读账密）
-# 1. 编辑 .env，填写 GITCODE_USERNAME 和 GITCODE_PASSWORD
-# 2. 运行脚本，成功后自动更新 .env 的 GITCODE_COOKIE
+# 方式 1：自动登录（推荐，从 config.yaml 读账密）
+# 1. 编辑 config.yaml，填写 gitcode.username 和 gitcode.password
+# 2. 运行脚本，成功后自动回写 config.yaml 的 gitcode.cookie
 python phase02/scripts/login_helper.py
 
 # 方式 2：命令行传参
 python phase02/scripts/login_helper.py <username> <password>
-# 输出 Cookie 串，手动复制到 .env 的 GITCODE_COOKIE=
+# 输出 Cookie 串，手动复制到 config.yaml 的 gitcode.cookie
 
 # 方式 3：手动（浏览器已登录）
 # 开发者工具 → Application/Storage → Cookies → gitcode.com → 复制关键 cookie

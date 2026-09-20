@@ -15,15 +15,20 @@
   4) ${SECRET} 展开后的真实值在落盘前一律替换为 ***，不写进 results/。
 
 环境变量:
-  GIT_ALLOW_PUSH     1=执行 push 用例（默认 0=跳过记 INCONCLUSIVE）
-  GIT_CASE_TIMEOUT   单条命令超时秒数（默认 900，大仓 clone 用例需要）
+  git.allow_push     true=执行 push 用例（默认 false=跳过记 INCONCLUSIVE）
+  git.case_timeout   单条命令超时秒数（默认 900，大仓 clone 用例需要）
+  （均来自 config.yaml，对应环境变量 GIT_ALLOW_PUSH / GIT_CASE_TIMEOUT）
 """
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config_loader  # noqa: E402,F401  自动加载 config.yaml
 
 ALLOW_PUSH = os.environ.get("GIT_ALLOW_PUSH", "0") == "1"
 TIMEOUT = int(os.environ.get("GIT_CASE_TIMEOUT", 900))

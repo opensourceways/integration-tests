@@ -22,6 +22,9 @@ import glob
 HERE = os.path.dirname(os.path.abspath(__file__))
 PHASE02 = os.path.dirname(HERE)
 
+sys.path.insert(0, HERE)
+import config_loader  # noqa: E402,F401  自动加载 config.yaml
+
 # 内部判定 → 对外结论
 CONCLUSION = {
     "PASS": "通过",

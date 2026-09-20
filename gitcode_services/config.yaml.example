@@ -1,0 +1,113 @@
+# config.yaml.example — 复制为 config.yaml 后填入真实凭证
+#
+#   cp config.yaml.example config.yaml
+#
+# config.yaml 已被 .gitignore / .dockerignore 双重排除，不会入库、不进镜像层。
+# 容器运行时通过 volume 挂载注入（见 docker-compose.yml）。
+#
+# 优先级：真实环境变量 > config.yaml。CI 里 `-e API_ALLOW_WRITE=0` 可覆盖本文件。
+# 节名 + 键名 → 环境变量：gitcode.owner → GITCODE_OWNER，api.case_timeout →
+# API_CASE_TIMEOUT，gate/auth/runtime 节无前缀（tz → TZ）。
+
+# ── GitCode 平台与被测仓 ──────────────────────────────────────────
+gitcode:
+  # 访问令牌。也可改用文件方式：写入 ~/.gitcode-token（优先级更高）
+  access_token: ""
+
+  # 浏览器登录后的 Cookie 串。缺失时 UI 用例记为 ENV_ERROR，
+  # 且可能把执行覆盖率压到 60% 以下触发 INCONCLUSIVE（退出码 2）
+  #
+  # 获取方式 1（自动，推荐）：填好下方 username / password，然后运行
+  #   python phase02/scripts/login_helper.py
+  #   脚本会自动登录并把 Cookie 回写到本文件的 gitcode.cookie
+  # 获取方式 2（命令行）：
+  #   python phase02/scripts/login_helper.py <username> <password>
+  # 获取方式 3（手动）：浏览器登录 gitcode.com → 开发者工具 →
+  #   Application/Storage → Cookies → 复制成 `k=v; k2=v2` 格式
+  cookie: ""
+  username: ""
+  password: ""
+
+  # 被测仓（有默认值，按需覆盖）
+  owner: ComputingActionTest
+  repo: bingo
+  branch: main
+  api_base_url: https://api.gitcode.com
+
+  # 目标 workflow id（默认值来自 phase02/scripts/workflow_runner.py）
+  workflow_id: b03a4b84cd784ddea00c5270eba62c7f
+
+  # 指定 runner executor，留空为平台默认
+  executor: ""
+
+# ── workflow 执行器调参 ───────────────────────────────────────────
+phase02:
+  # 单条 workflow 用例超时（秒）
+  case_timeout: 300
+  # 轮询运行状态的间隔（秒）
+  poll_interval: 12
+
+# ── api 执行器（86 条 api 用例）───────────────────────────────────
+api:
+  # 单个 HTTP 请求超时（秒）
+  case_timeout: 30
+  # 请求之间的间隔（秒），避免触发平台限流
+  request_delay: 0.3
+  # false = 跳过所有写方法（POST/PUT/PATCH/DELETE），记 INCONCLUSIVE
+  allow_write: true
+  # true = 允许「直打真实资源」的 32 条写请求（含合并 PR、转移仓库等不可逆
+  #        操作）。默认 false 跳过。确认目标是专用测试仓后再开，
+  #        详见 README「api 执行器的安全门禁」
+  allow_unsafe_write: false
+
+# ── ui 执行器（75 条 ui 用例，需 Playwright Chromium）──────────────
+ui:
+  # false = 有头模式（本地调试用），CI 保持 true
+  headless: true
+  # 页面导航超时（毫秒）
+  nav_timeout: 30000
+  # 单个 action 超时（毫秒）
+  action_timeout: 15000
+  # SPA 渲染静默等待（毫秒）。GitCode 是 SPA，domcontentloaded 时 body 已存在
+  # 但内容未渲染；不等静默会让断言与渲染赛跑，同一条用例出现 PASS/FAIL 漂移
+  settle_timeout: 10000
+
+# ── git 执行器（5 条 git 用例）────────────────────────────────────
+git:
+  # true = 执行 push 用例（写入真实仓）。默认 false 跳过
+  allow_push: false
+  # 单条 git 命令超时（秒）；大仓 clone 用例需要较大值
+  case_timeout: 900
+
+# ── 凭证 ─────────────────────────────────────────────────────────
+auth:
+  # GIT-CLONE-01-002 用 ${PAT_TOKEN} 做 HTTPS 鉴权，需在此提供
+  pat_token: ""
+
+# ── 门禁 ─────────────────────────────────────────────────────────
+gate:
+  # 执行覆盖率低于此值判 INCONCLUSIVE（退出码 2）
+  min_execution_coverage: 0.6
+
+# ── 运行时 ───────────────────────────────────────────────────────
+runtime:
+  # 时区（影响 run-id 时间戳与报告时间）
+  tz: Asia/Shanghai
+  # login_helper.py 登录超时（毫秒）
+  login_timeout: 30000
+
+# ── 邮件报告 ─────────────────────────────────────────────────────
+# 本节不注入环境变量（git 执行器会把整份 os.environ 传给子进程，
+# SMTP 密码不应随之外泄），由 email_sender.py 结构化读取。
+email:
+  # 开关：false 时 run_daily.sh 的第 8 步跳过发送
+  enabled: true
+  sender: ""
+  # 注意是 SMTP 授权码，不是邮箱登录密码
+  password: ""
+  receivers:
+    - ""
+  smtp_host: smtp.163.com
+  # 465 = SSL；如用 587 STARTTLS 请把 use_ssl 设为 false
+  smtp_port: 465
+  use_ssl: true

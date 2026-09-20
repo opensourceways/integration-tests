@@ -32,6 +32,8 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import config_loader  # noqa: E402,F401  自动加载 config.yaml
+
 TIMEOUT = int(os.environ.get("API_CASE_TIMEOUT", 30))
 ALLOW_WRITE = os.environ.get("API_ALLOW_WRITE", "1") != "0"
 # 直打真实资源的写请求默认不发（见模块文档「安全模型」第 2 条）

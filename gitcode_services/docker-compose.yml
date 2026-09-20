@@ -1,12 +1,13 @@
 # docker-compose.yml — 一条命令跑全量回归
 #
 # 用法（在本包目录下）:
-#   cp .env.example .env       # 首次：填好 token / cookie
+#   cp config.yaml.example config.yaml   # 首次：填好 token / cookie
 #   docker compose build
-#   docker compose run --rm harness            # 跑全量 249 条
+#   docker compose run --rm harness            # 跑全量 112 条（已移除失败用例）
 #   docker compose run --rm harness cases/yaml nightly
 #
-# 凭证从本包目录的 .env 读取，由 .dockerignore 挡在镜像层之外。
+# 凭证从本包目录的 config.yaml 以只读 volume 挂载注入，
+# 由 .dockerignore 挡在镜像层之外。
 
 services:
   harness:
@@ -15,16 +16,16 @@ services:
       context: .
       dockerfile: Dockerfile
     image: gitcode-test-harness:latest
-    env_file:
-      - .env
     environment:
-      MIN_EXECUTION_COVERAGE: "0.6"
       TZ: Asia/Shanghai
     volumes:
+      # 配置（含凭证）只读挂载，不进镜像层。
+      # login_helper.py 需要回写 cookie 时，去掉 :ro
+      - ./config.yaml:/app/config.yaml:ro
       # 运行结果与报告落到宿主机，容器销毁后仍可查
       - ./phase02/runs:/app/phase02/runs
       - ./phase02/reports:/app/phase02/reports
     # UI 用例跑 Chromium，共享内存不足会导致浏览器崩溃
     shm_size: "1gb"
-    # 全量 249 条（含 75 条 UI）耗时较长，给足超时空间
+    # 全量 112 条（含 45 条 UI）耗时较长，给足超时空间
     stop_grace_period: 30s

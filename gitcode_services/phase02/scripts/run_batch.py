@@ -23,6 +23,7 @@ PHASE02 = os.path.dirname(HERE)
 ROOT = os.path.dirname(PHASE02)
 
 sys.path.insert(0, HERE)
+import config_loader  # noqa: F401  自动加载 config.yaml
 import workflow_runner as wr
 import assertion_engine as ae
 import run_case as rc

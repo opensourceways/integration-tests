@@ -7,15 +7,15 @@
 # HTTP 客户端：API / Workflow / 日志抓取
 requests>=2.31.0,<3.0.0
 
-# YAML 解析：可执行用例契约加载
+# YAML 解析：可执行用例契约加载 + config.yaml 配置加载
 PyYAML>=6.0.1,<7.0.0
 
 # UI 自动化：75 条 UI 用例（headless Chromium）
 playwright>=1.40.0,<2.0.0
 
 # ── 说明 ───────────────────────────────────────────────────────────
-# .env 读取由 phase02/scripts/workflow_runner.py 自带的解析器完成
-# （_load_dotenv_cookie，向上遍历 4 级目录），不依赖 python-dotenv。
+# config.yaml 读取由 phase02/scripts/config_loader.py 完成（PyYAML 解析后
+# 注入 os.environ，环境变量优先），不依赖 python-dotenv。
 #
 # 其余均为 Python 3.7+ 标准库：json / os / sys / glob / subprocess /
 # time / re / hashlib / base64 / xml.etree.ElementTree / urllib /

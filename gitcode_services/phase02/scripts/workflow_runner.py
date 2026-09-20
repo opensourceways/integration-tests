@@ -43,35 +43,22 @@ import yaml
 
 # log_fetcher / validate_workflow 与本文件同目录（phase02/scripts/）
 try:
+    import config_loader as _cfg
     import log_fetcher
     import validate_workflow as _vwf
 except ImportError:  # 允许从别处 import 时按路径补齐
     import sys
     _here = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, _here)
+    import config_loader as _cfg  # noqa
     import log_fetcher  # noqa
     import validate_workflow as _vwf  # noqa
 
 
 # ── 配置 ──────────────────────────────────────────────────────────
-def _load_dotenv_cookie():
-    """从工程根目录 .env 文件读取 GITCODE_COOKIE。遍历4级目录。"""
-    here = os.path.dirname(os.path.abspath(__file__))
-    for _ in range(4):
-        candidate = os.path.join(here, ".env")
-        if os.path.exists(candidate):
-            env_vars = {}
-            with open(candidate, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    if "=" in line:
-                        k, _, v = line.partition("=")
-                        env_vars[k.strip()] = v.strip().strip('"').strip("'")
-            return env_vars.get("GITCODE_COOKIE", "")
-        here = os.path.dirname(here)
-    return ""
+def _load_config_cookie():
+    """从 config.yaml 读取 gitcode.cookie。"""
+    return _cfg.get("gitcode.cookie", "") or ""
 
 
 def _extract_jwt(raw):
@@ -122,7 +109,7 @@ class RunnerConfig:
     def _load_cookie():
         cookie = os.environ.get("GITCODE_COOKIE", "")
         if not cookie:
-            cookie = _load_dotenv_cookie()
+            cookie = _load_config_cookie()
         if not cookie:
             path = os.path.expanduser("~/.gitcode-cookie")
             if os.path.exists(path):

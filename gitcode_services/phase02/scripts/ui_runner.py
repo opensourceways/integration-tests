@@ -16,29 +16,20 @@ evaluate() 只吃 probes —— 因此判定逻辑可在无浏览器环境下单
 selector 直接透传给 Playwright，因此 `:visible`、`:has-text()`、
 逗号回退（`a, b, c` = 命中任一）都按 Playwright CSS 方言生效。
 
-环境变量:
-  UI_HEADLESS=0      有头模式调试（默认 1 headless）
-  UI_ACTION_TIMEOUT  单个 action 默认超时毫秒（默认 15000）
-  UI_NAV_TIMEOUT     页面导航超时毫秒（默认 30000）
-  UI_SETTLE_TIMEOUT  SPA 渲染静默等待毫秒（默认 10000）
-  GITCODE_COOKIE     登录态；缺失时公开页仍可跑，私有页会判不可测试
+配置（config.yaml 的 ui 节 / gitcode 节，环境变量可覆盖）:
+  ui.headless: false     有头模式调试（默认 true headless）→ UI_HEADLESS
+  ui.action_timeout      单个 action 默认超时毫秒（默认 15000）
+  ui.nav_timeout         页面导航超时毫秒（默认 30000）
+  ui.settle_timeout      SPA 渲染静默等待毫秒（默认 10000）
+  gitcode.cookie         登录态；缺失时公开页仍可跑，私有页会判不可测试
 """
 import os
 import re
-import pathlib
+import sys
 
-# 自动加载 .env（优先级：环境变量 > .env 文件）
-_env_path = pathlib.Path(__file__).parent.parent.parent / ".env"
-if _env_path.exists() and not os.environ.get("_UI_RUNNER_ENV_LOADED"):
-    with open(_env_path, encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _k, _, _v = _line.partition("=")
-                _k = _k.strip()
-                if _k and _k not in os.environ:  # 环境变量优先
-                    os.environ[_k] = _v.strip()
-    os.environ["_UI_RUNNER_ENV_LOADED"] = "1"
+# 自动加载 config.yaml（优先级：环境变量 > config.yaml）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config_loader  # noqa: E402,F401
 
 HEADLESS = os.environ.get("UI_HEADLESS", "1") != "0"
 ACTION_TIMEOUT = int(os.environ.get("UI_ACTION_TIMEOUT", 15000))

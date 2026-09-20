@@ -40,6 +40,16 @@ if [ ! -d "phase02/scripts" ]; then
     exit 1
 fi
 
+# 配置文件（凭证与调参）。缺失时不中断：环境变量也能提供全部配置，
+# 真正缺凭证会在各批次如实落 ENV_ERROR，由覆盖率门禁给结论。
+CONFIG_FILE="${CONFIG_FILE:-$ROOT_DIR/config.yaml}"
+if [ -f "$CONFIG_FILE" ]; then
+    export CONFIG_FILE
+else
+    echo "警告: 未找到配置文件 $CONFIG_FILE"
+    echo "      可执行: cp config.yaml.example config.yaml 后填入凭证"
+fi
+
 # 探测 Python
 PYTHON=""
 for cmd in python3 python py; do
@@ -60,6 +70,7 @@ echo "Run ID       : $RUN_ID"
 echo "用例集       : $CASE_SET （$CASE_COUNT 条）"
 echo "Python       : $PYTHON"
 echo "包根目录     : $ROOT_DIR"
+echo "配置文件     : ${CONFIG_FILE:-（未找到，仅用环境变量）}"
 
 # 读上次 run-id（用于回归对比）
 PREV_RUN=""
@@ -70,34 +81,34 @@ fi
 echo ""
 
 # 1. Schema 校验 + 按 test_type 分流（workflow/api/ui/git 各一条队列）
-echo "[1/7] Schema 校验与分流..."
+echo "[1/8] Schema 校验与分流..."
 $PYTHON phase02/scripts/schema_check_ext.py "$CASE_SET_TAG" "$RUN_ID" --src-dir "$CASE_SET"
 
 # 2-4. 四类批次。任一类环境不可用时会如实落 ENV_ERROR，不应中断整轮，
 #      故统一容错；真正的门禁结论由第 7 步的覆盖率与阈值给出。
-echo "[2/7] workflow 批量执行..."
+echo "[2/8] workflow 批量执行..."
 $PYTHON phase02/scripts/run_batch.py "$RUN_ID"
 
-echo "[3/7] api 批量执行..."
+echo "[3/8] api 批量执行..."
 $PYTHON phase02/scripts/run_api_batch.py "$RUN_ID" || echo "警告: api 批次异常退出，继续"
 
-echo "[4/7] ui 批量执行..."
+echo "[4/8] ui 批量执行..."
 $PYTHON phase02/scripts/run_ui_batch.py "$RUN_ID" || echo "警告: ui 批次异常退出，继续"
 
-echo "[5/7] git 批量执行..."
+echo "[5/8] git 批量执行..."
 $PYTHON phase02/scripts/run_git_batch.py "$RUN_ID" || echo "警告: git 批次异常退出，继续"
 
 # 6. JUnit XML 导出（供 Jenkins 测试趋势图）
 #    零结果时导出会返回 1；此处不阻断，让 report_builder 给出正式门禁结论
-echo "[6/7] JUnit XML 导出..."
+echo "[6/8] JUnit XML 导出..."
 $PYTHON phase02/scripts/junit_export.py "$RUN_ID" || echo "警告: JUnit 导出无结果，继续生成报告"
 
-# 5. 报告生成 + 门禁判定
+# 7. 报告生成 + 门禁判定
 #    上游 report_builder.py 只在「用法错误」(2)、「无结果」(1) 时非零退出，
 #    GO/BLOCKED/INCONCLUSIVE 一律返回 0 —— 门禁退出码在上游并未实现。
 #    这里不改上游文件（会被 sync-cases.sh 覆盖），而是解析它确定性打印的
 #    「门禁: <GO|BLOCKED|INCONCLUSIVE>」一行，映射成真正的退出码。
-echo "[7/7] 报告生成..."
+echo "[7/8] 报告生成..."
 set +e
 REPORT_LOG="phase02/runs/$RUN_ID/report.log"
 if [ -n "$PREV_RUN" ]; then
@@ -135,5 +146,19 @@ echo "🧪 JUnit XML     : phase02/runs/$RUN_ID/junit.xml"
 echo "📁 详细结果      : phase02/runs/$RUN_ID/results/"
 echo ""
 echo "门禁判定: $GATE_TEXT (退出码 $GATE_CODE)"
+
+# 8. 发送邮件报告（config.yaml 的 email.enabled 为 false 时由脚本内部跳过）
+echo ""
+echo "[8/8] 发送邮件报告..."
+set +e
+$PYTHON phase02/scripts/email_sender.py "$RUN_ID"
+EMAIL_CODE=$?
+set -e
+
+if [ "$EMAIL_CODE" -eq 0 ]; then
+    echo "✅ 邮件发送成功"
+else
+    echo "⚠️  邮件发送失败，但不影响测试结果"
+fi
 
 exit "$GATE_CODE"

@@ -1,7 +1,8 @@
-# 凭证绝不进镜像层
+# 凭证绝不进镜像层（运行时以 volume 挂载注入）
+config.yaml
+!config.yaml.example
 .env
 *.env
-!.env.example
 
 # 本地运行产物（通过 volume 挂载，不需要打进镜像）
 phase02/runs/

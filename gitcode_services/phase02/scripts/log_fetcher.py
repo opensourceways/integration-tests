@@ -23,7 +23,10 @@ log_fetcher.py — GitCode job 日志抓取器（harness 组件）
   raw  = log_fetcher.fetch_job_logs(None, owner, repo, run_id, job_meta)  # 纯正文(供扫描)
   text = log_fetcher.render_job_logs(None, owner, repo, run_id, job_meta) # 带 step 名(供人读)
 """
-import os, io, json, zipfile, tempfile, urllib.request, urllib.error
+import os, io, json, zipfile, tempfile, urllib.request, urllib.error, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config_loader  # noqa: E402,F401  自动加载 config.yaml
 
 API = "https://api.gitcode.com"
 

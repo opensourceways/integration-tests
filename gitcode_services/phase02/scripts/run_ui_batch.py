@@ -18,6 +18,7 @@ PHASE02 = os.path.dirname(HERE)
 ROOT = os.path.dirname(PHASE02)
 sys.path.insert(0, HERE)
 
+import config_loader  # noqa: E402,F401  自动加载 config.yaml
 import run_case as rc  # noqa: E402
 import ui_runner  # noqa: E402
 from run_api_batch import _record_all_env_error, _load_queue  # noqa: E402

@@ -8,7 +8,7 @@
   1. --cookie  直接传 GITCODE_COOKIE（推荐，从浏览器 F12 抓包获取）
   2. --token   传 Bearer token
   3. 环境变量 GITCODE_COOKIE 或 GITCODE_ACCESS_TOKEN
-  4. 自动从项目根目录 .env 文件读取
+  4. 自动从项目根目录 config.yaml 读取（gitcode.cookie / gitcode.access_token）
 
 Usage:
     python3 validate_workflow.py <yaml-file> [--cookie COOKIE] [--workflow-id ID]
@@ -23,34 +23,14 @@ import sys
 
 import requests
 
+# 自动加载 config.yaml（优先级：环境变量 > config.yaml）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config_loader  # noqa: E402
+
 
 def _load_env_file(env_path: str = None) -> dict:
-    """从 .env 文件加载环境变量"""
-    if env_path is None:
-        # 从脚本位置向上找项目根目录
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        for _ in range(3):
-            candidate = os.path.join(script_dir, ".env")
-            if os.path.exists(candidate):
-                env_path = candidate
-                break
-            script_dir = os.path.dirname(script_dir)
-
-    if env_path is None or not os.path.exists(env_path):
-        return {}
-
-    env_vars = {}
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, _, val = line.partition("=")
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                env_vars[key] = val
-    return env_vars
+    """从 config.yaml 读取扁平化后的配置（兼容原 .env 接口）。"""
+    return config_loader.env_mapping()
 
 
 def _get_workflow_list(project_path: str, cookie: str, host: str) -> list:
@@ -160,7 +140,7 @@ def main():
         env_vars = _load_env_file()
         cookie = env_vars.get("GITCODE_COOKIE")
     if not cookie:
-        print("[!] 请提供 --cookie、--token、GITCODE_COOKIE 环境变量，或在项目根目录 .env 中设置", file=sys.stderr)
+        print("[!] 请提供 --cookie、--token、GITCODE_COOKIE 环境变量，或在项目根目录 config.yaml 的 gitcode.cookie 中设置", file=sys.stderr)
         sys.exit(1)
 
     # ── Read YAML ───────────────────────────────────────
