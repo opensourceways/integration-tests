@@ -20,5 +20,5 @@ __pycache__/
 .vscode/
 
 # 文档（不影响执行，减小镜像层）
-JENKINS-SETUP.md
 README.md
+EMAIL_FEATURE.md
