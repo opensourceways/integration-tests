@@ -52,7 +52,7 @@ COPY --chown=testuser:testuser . .
 USER testuser
 
 # 挂载点，未挂载时也能写
-RUN mkdir -p phase02/runs phase02/reports
+RUN mkdir -p /app/gitcode_services/phase02/runs /app/gitcode_services/phase02/reports
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python3 -c "import requests, yaml; from playwright.sync_api import sync_playwright" || exit 1
