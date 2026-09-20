@@ -16,6 +16,9 @@
 
 FROM openeuler/openeuler:23.09
 
+LABEL maintainer="guoxiaozhen0304" \
+      description="GitCode 基础能力自动化测试执行环境"
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -42,7 +45,7 @@ RUN python3 -m playwright install --with-deps chromium || \
      yum clean all && rm -rf /var/cache/yum && \
      python3 -m playwright install chromium)
 
-RUN useradd -m -u 1000 testuser && chmod -R a+rX /ms-playwright
+RUN useradd -m -u 1000 testuser && chmod -R a+rX /app/gitcode_services/phase02
 
 COPY --chown=testuser:testuser . .
 
@@ -54,8 +57,6 @@ RUN mkdir -p phase02/runs phase02/reports
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python3 -c "import requests, yaml; from playwright.sync_api import sync_playwright" || exit 1
 
-LABEL maintainer="guoxiaozhen0304" \
-      description="GitCode 基础能力自动化测试执行环境"
 
-ENTRYPOINT ["bash", "run_daily.sh"]
+ENTRYPOINT ["/bin/bash", "run_daily.sh"]
 CMD ["cases/yaml", "daily"]
