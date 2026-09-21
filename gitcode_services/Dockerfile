@@ -58,5 +58,5 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python3 -c "import requests, yaml; from playwright.sync_api import sync_playwright" || exit 1
 
 
-ENTRYPOINT ["/bin/bash", "run_daily.sh"]
-CMD ["cases/yaml", "daily"]
+ENTRYPOINT ["/bin/bash", "/app/gitcode_services/run_daily.sh"]
+CMD ["/app/gitcode_services/cases/yaml", "daily"]
