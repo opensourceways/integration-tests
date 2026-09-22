@@ -118,6 +118,12 @@ DEFAULT_TIMEOUT = 30000  # 30s
 NAVIGATION_TIMEOUT = 45000  # 45s
 DIALOG_TIMEOUT = 10000  # 10s
 
+# 页面渲染兜底：SPA 首屏偶发 body/导航项停在 hidden，刷新后即恢复。
+# 与登录流程保持一致的「刷新重试」策略，至多 3 次。
+PAGE_READY_REFRESH_ATTEMPTS = int(os.environ.get("PAGE_READY_REFRESH_ATTEMPTS", "3"))
+# 单轮等待 body/导航项可见的时长，短于 DEFAULT_TIMEOUT 以便尽快进入刷新重试
+PAGE_READY_TIMEOUT = int(os.environ.get("PAGE_READY_TIMEOUT", "12000"))
+
 
 # ============================== Fixtures ==============================
 @pytest.fixture(scope="session")
@@ -179,13 +185,22 @@ def _open_mobile_menu_if_needed(page: Page) -> None:
             return
 
 
-def _ensure_nav_visible(page: Page) -> None:
-    """辅助：等待导航栏渲染完成（兼容移动端折叠菜单）。"""
-    page.wait_for_selector("body", state="visible", timeout=DEFAULT_TIMEOUT)
+def _try_page_ready(page: Page) -> bool:
+    """
+    单轮尝试：等待 body 与实训环境导航项进入可见态。
+
+    :return: True 表示本轮页面已就绪；False 表示仍停在 hidden，需由调用方刷新重试
+    """
+    try:
+        page.wait_for_selector("body", state="visible", timeout=PAGE_READY_TIMEOUT)
+    except PlaywrightTimeout:
+        return False
+
     page.wait_for_load_state("domcontentloaded")
     _open_mobile_menu_if_needed(page)
-    nav_selectors = [".app-header .header-nav", ".header-nav", ".app-header"]
-    for sel in nav_selectors:
+
+    # 先等外层容器，给内部导航项的渲染留出时间
+    for sel in (".app-header .header-nav", ".header-nav", ".app-header"):
         try:
             locator = page.locator(sel).first
             if locator.count() > 0:
@@ -193,6 +208,56 @@ def _ensure_nav_visible(page: Page) -> None:
                 break
         except PlaywrightTimeout:
             continue
+
+    # 移动端导航项本就折叠在菜单内，不以其可见性判定就绪
+    if _is_mobile_viewport(page):
+        return True
+
+    # 关键：等导航项自身可见。原实现只等容器，导致 .nav-item 仍为 hidden 时
+    # 就交给 expect().to_be_visible() 断言，表现为偶发失败。
+    try:
+        page.locator(NAV_ITEM_SELECTOR).first.wait_for(
+            state="visible", timeout=PAGE_READY_TIMEOUT
+        )
+        return True
+    except PlaywrightTimeout:
+        return False
+
+
+def _ensure_nav_visible(page: Page) -> None:
+    """
+    辅助：等待导航栏渲染完成（兼容移动端折叠菜单）。
+
+    SPA 首屏偶发停在 hidden，故失败后强制刷新重试，至多
+    PAGE_READY_REFRESH_ATTEMPTS 次；仍不就绪才抛错。
+    """
+    for attempt in range(1, PAGE_READY_REFRESH_ATTEMPTS + 1):
+        if _try_page_ready(page):
+            if attempt > 1:
+                print(f"   [页面] 第 {attempt} 次尝试后导航栏已就绪")
+            return
+
+        if attempt < PAGE_READY_REFRESH_ATTEMPTS:
+            print(
+                f"   [页面] 导航栏未进入可见态，刷新重试 "
+                f"{attempt}/{PAGE_READY_REFRESH_ATTEMPTS - 1}"
+            )
+            try:
+                page.reload(wait_until="domcontentloaded")
+            except PlaywrightTimeout:
+                print("   [页面] 刷新超时，继续下一轮尝试")
+            page.wait_for_timeout(3000)
+
+    try:
+        page.screenshot(path="debug_nav_not_ready.png", full_page=True)
+    except Exception:
+        pass
+    raise AssertionError(
+        f"页面导航栏在 {PAGE_READY_REFRESH_ATTEMPTS} 次尝试（含刷新）后仍未进入可见态。\n"
+        f"   当前 URL: {page.url}\n"
+        f"   视口: {page.viewport_size}\n"
+        f"   截图: debug_nav_not_ready.png"
+    )
 
 
 def _slider_visible(page: Page) -> bool:
@@ -577,6 +642,25 @@ def _login_to_usercenter(page: Page) -> None:
         except PlaywrightTimeout:
             pass
 
+    # 若仍在登录页，尝试强制刷新页面（最多3次）
+    print("   [登录] 仍在登录页，尝试刷新页面检查登录状态...")
+    for refresh_attempt in range(1, 4):
+        print(f"   [登录] 刷新页面 {refresh_attempt}/3")
+        page.reload()
+        page.wait_for_timeout(3000)
+
+        # 检查是否已离开登录页
+        current_url = page.url
+        if "login" not in current_url and "usercenter" not in current_url:
+            print(f"   [登录] 刷新后登录成功，当前URL: {current_url}")
+            return
+
+        # 检查是否仍在登录页
+        if "login" in current_url or "usercenter" in current_url:
+            print(f"   [登录] 刷新后仍在登录相关页面: {current_url}")
+            page.wait_for_timeout(2000)
+            continue
+
     # 抓取页面上的真实错误提示（覆盖 o-design 的 form-item-extra 等结构）
     err_text = ""
     for sel in [".form-item-extra", ".o-form-item-error", ".error-message",
@@ -597,7 +681,7 @@ def _login_to_usercenter(page: Page) -> None:
         pass
 
     raise AssertionError(
-        f"登录失败，仍停留在登录页。页面提示: {err_text or '(无)'}\n"
+        f"登录失败，刷新3次后仍停留在登录页。页面提示: {err_text or '(无)'}\n"
         f"   当前 URL: {page.url}\n"
         f"   登录方式: LOGIN_MODE={LOGIN_MODE}，账号: {TEST_ACCOUNT}\n"
         f"   截图: debug_login_failed.png"
@@ -610,11 +694,24 @@ def _click_training_nav_and_capture_dialog(page: Page, timeout: int = 30000) -> 
     辅助：点击实训环境导航项并捕获弹出的配置对话框。
     返回: (page 对象, 对话框元素或 None)
     """
-    nav_item = page.locator(NAV_ITEM_SELECTOR)
+    nav_item = page.locator(NAV_ITEM_SELECTOR).first
+
+    # 兜底：导航项未就绪时走刷新重试，避免直接断言失败
+    try:
+        nav_item.wait_for(state="visible", timeout=PAGE_READY_TIMEOUT)
+    except PlaywrightTimeout:
+        _ensure_nav_visible(page)
+        nav_item = page.locator(NAV_ITEM_SELECTOR).first
+
     expect(nav_item).to_be_visible(timeout=DEFAULT_TIMEOUT)
 
-    # 点击前记录对话框数量
-    pre_dialog_count = page.locator(DIALOG_SELECTOR).count()
+    # 遮罩未消散时点击会被拦截，等待其隐藏
+    mask = page.locator(".o-layer-mask").first
+    if mask.count() > 0 and mask.is_visible():
+        try:
+            mask.wait_for(state="hidden", timeout=5000)
+        except PlaywrightTimeout:
+            pass
 
     # 点击导航项
     nav_item.click()
