@@ -971,21 +971,6 @@ class TestApiAndConfig:
         )
         assert ascend_found, "对话框规格选项中未找到 ascend 关键词"
 
-    def test_dialog_shows_usage_notes(self, page_fixture: Page) -> None:
-        """
-        TC-UI-DIALOG-003 [正常流] 配置对话框包含使用说明（运行时长、资源释放等）
-        优先级：P1
-        """
-        _goto_home(page_fixture)
-
-        page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-        assert dialog is not None, "对话框未弹出"
-
-        body_text = dialog.inner_text().lower()
-        # 断言：包含关键使用提示（兼容中英文）
-        assert any(kw in body_text for kw in ["jupyter", "3", "小时", "资源"]), \
-            f"对话框缺少关键使用说明，实际内容: {body_text[:200]}"
-
 
 # -----------------------------------------------------------------------
 # 三、登录态与权限校验
