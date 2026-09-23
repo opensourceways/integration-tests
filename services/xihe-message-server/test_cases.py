@@ -1,7 +1,12 @@
 """
 测试用例集：MindSpore 官网 - 实训环境导航功能
 
-> 用例总数：20 条 ｜ P0：5 ｜ P1：5 ｜ P2：3
+> 用例总数：13 项（pytest 收集数，含视口参数化展开）
+> 合并记录：原 17 项经三处去重合并为 13 项
+>   - TC-UI-RESP-001  → 并入 TC-UI-NAV-001（同一 VIEWPORTS，属包含关系）
+>   - TC-UI-EDGE-002  → 并入 TC-UI-NAV-004（ESC 关不掉，代码已回落取消按钮）
+>   - TC-API-SCHEMA-001 → 并入 TC-API-JUPYTER-001（前置一致，仅断言粒度不同）
+> 合并后原 TC-xxx 编号保留在各用例 docstring 中，覆盖矩阵仍可追溯
 > AI 执行工具：playwright + pytest
 > 依赖：pytest, pytest-playwright, playwright
 > 推荐执行命令：
@@ -330,22 +335,9 @@ def _await_slider_cleared(page: Page, stage: str) -> bool:
     pytest.fail(f"[FAIL] 「{stage}」环节等待人工滑块验证超时（{SLIDER_WAIT}s），截图: {shot}")
 
 
-def _login_if_needed(page: Page) -> None:
-    """
-    辅助：如当前测试环境需要登录，则执行通用登录流程。
-    若页面检测到登录相关元素，则自动填入测试账号密码。
-    """
-    if "/login" in page.url or page.locator("input[type='password']").count() > 0:
-        account_input = page.locator('input[type="text"], input[type="email"], input[type="tel"]').first
-        if account_input.count() > 0:
-            account_input.fill(TEST_ACCOUNT)
-        password_input = page.locator('input[type="password"]').first
-        if password_input.count() > 0:
-            password_input.fill(TEST_PASSWORD)
-        login_btn = page.locator('button:has-text("登录"), button:has-text("Login"), a:has-text("登录")').first
-        if login_btn.count() > 0:
-            login_btn.click()
-            page.wait_for_load_state("domcontentloaded")
+# 已移除 _login_if_needed：该函数仅在 URL 含 /login 或页面存在密码框时才填表，
+# 在首页调用时静默空操作，曾导致 TC-UI-AUTH-002 名义测登录态、实际走匿名路径。
+# 需要登录态的用例统一使用 _login_to_usercenter（含验证码 + 滑块完整流程）。
 
 
 
@@ -813,6 +805,25 @@ def _get_input_value(inp) -> str:
     return (inp.get_attribute("value") or "") or (inp.input_value() or "")
 
 
+def _click_nav_expect_cloud_api(page: Page, timeout: int = DEFAULT_TIMEOUT):
+    """
+    辅助：点击「实训环境」导航项并显式等待 cloud 配置接口返回。
+
+    原实现点击后用固定 wait_for_timeout(3000) 等接口，全量跑时浏览器负载高、
+    3 秒内响应未回即误判为「未捕获到 API 响应」，表现为偶发失败。改为
+    expect_response 事件驱动等待，响应到达即返回，不再靠睡眠赌时间。
+
+    :param timeout: 等待接口响应的最长毫秒数
+    :return: 该接口的 Response 对象
+    :raises PlaywrightTimeout: 超时仍未捕获到接口响应
+    """
+    with page.expect_response(
+        lambda r: API_JUPYTER_CLOUD in r.url, timeout=timeout
+    ) as resp_info:
+        page.locator(NAV_ITEM_SELECTOR).click()
+    return resp_info.value
+
+
 # ============================== 测试用例 ==============================
 # -----------------------------------------------------------------------
 # 一、导航栏渲染与点击
@@ -824,13 +835,20 @@ class TestNavigationRendering:
     @pytest.mark.parametrize("viewport_name, size", VIEWPORTS.items())
     def test_nav_visible_in_all_viewports(self, page_fixture: Page, viewport_name: str, size: tuple) -> None:
         """
-        TC-UI-NAV-001 [正常流][响应式] 各视口下导航栏均可见且可交互
+        TC-UI-NAV-001 + TC-UI-RESP-001 [正常流][响应式]
+        各视口下导航栏可见可交互，且点击后对话框正确弹出、内容非空
         优先级：P1
+
+        合并说明：原 TC-UI-RESP-001（模块五）与本用例遍历同一个 VIEWPORTS 字典、
+        各自加载一次首页，且「点击导航弹窗」本就以「导航可见」为前提，属包含关系，
+        故合并为一次页面加载完成两段校验，省去重复的 goto。
+        断言分两段：先导航栏渲染（原 NAV-001），再对话框弹出（原 RESP-001）。
         """
         width, height = size
         page_fixture.set_viewport_size({"width": width, "height": height})
         _goto_home(page_fixture)
 
+        # ---- 第一段：导航栏渲染与可见性（原 TC-UI-NAV-001）----
         nav_item = page_fixture.locator(NAV_TEXT_SELECTOR)
         if nav_item.count() > 0 and nav_item.is_visible():
             expect(nav_item).to_have_text("实训环境")
@@ -841,6 +859,20 @@ class TestNavigationRendering:
         parent = page_fixture.locator(NAV_ITEM_SELECTOR)
         classes = parent.get_attribute("class") or ""
         assert "nav-item" in classes, f"期望 class 包含 'nav-item'，实际: {classes}"
+
+        # ---- 第二段：对话框弹出与内容校验（原 TC-UI-RESP-001）----
+        # 移动端下导航项可能被折叠，此时跳过对话框校验
+        if parent.count() == 0 or not parent.is_visible():
+            pytest.skip(f"视口 {viewport_name} 下导航栏被折叠，无法测试对话框")
+
+        page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
+        assert dialog is not None, f"视口 {viewport_name} 下点击后未弹出对话框"
+        expect(dialog).to_be_visible()
+
+        # 断言：对话框内容可见（标题或规格选择器）
+        header = dialog.locator(DIALOG_HEADER_SELECTOR).first
+        spec_select = dialog.locator(".o-select").first
+        assert header.count() > 0 or spec_select.count() > 0, "对话框内容为空"
 
     def test_nav_hover_effect(self, page_fixture: Page) -> None:
         """
@@ -879,26 +911,42 @@ class TestNavigationRendering:
 
     def test_dialog_cancel_closes(self, page_fixture: Page) -> None:
         """
-        TC-UI-NAV-004 [正常流] 点击对话框取消按钮可关闭对话框
+        TC-UI-NAV-004 + TC-UI-EDGE-002 [正常流][异常]
+        ESC 键不关闭对话框（当前实现），点击取消按钮可正常关闭
         优先级：P1
+
+        合并说明：原 TC-UI-EDGE-002 立意测 ESC 关闭，但实测该对话框不响应 ESC，
+        其代码已回落为点击取消按钮，与本用例完全重复，故合并。
+        此处先显式断言「ESC 是 no-op」把该产品行为固化成回归保护，
+        再验证取消按钮能正常关闭。
         """
         _goto_home(page_fixture)
 
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None, "对话框未弹出"
 
+        # 前置断言（原 TC-UI-EDGE-002）：ESC 不应关闭对话框。
+        # 若此断言失败，说明产品已支持 ESC 关闭，属行为变更，需同步更新用例预期。
+        page_fixture.keyboard.press("Escape")
+        page_fixture.wait_for_timeout(1000)
+        assert dialog.is_visible(), (
+            "ESC 键关闭了对话框 —— 与当前已知实现不符。"
+            "产品若已支持 ESC 关闭，请更新本用例预期"
+        )
+
         # 点击取消按钮
         cancel_btn = dialog.locator(DIALOG_CANCEL_BTN_SELECTOR).first
         if cancel_btn.count() > 0 and cancel_btn.is_visible():
             cancel_btn.click()
         else:
-            # 退而查找包含取消/关闭文本的按钮
-            close_btn = dialog.locator("button:has-text('取消'), button:has-text('Close'), .o-dlg-close").first
-            if close_btn.count() > 0:
-                close_btn.click()
-            else:
-                # 尝试按 ESC 关闭
-                page_fixture.keyboard.press("Escape")
+            # 退而查找包含取消/关闭文本的按钮。
+            # 注意：不再回落按 ESC —— 上方已断言 ESC 为 no-op，
+            # 用它兜底会与该断言自相矛盾。
+            close_btn = dialog.locator(
+                "button:has-text('取消'), button:has-text('Close'), .o-dlg-close"
+            ).first
+            assert close_btn.count() > 0, "对话框内未找到取消/关闭按钮"
+            close_btn.click()
 
         page_fixture.wait_for_timeout(1000)
 
@@ -915,10 +963,15 @@ class TestApiAndConfig:
 
     def test_api_jupyter_cloud_returns_config(self, page_fixture: Page) -> None:
         """
-        TC-API-JUPYTER-001 [正常流] 点击后 api-jupyter/server/user/whitelist/cloud 接口返回可用服务器配置
+        TC-API-JUPYTER-001 + TC-API-SCHEMA-001 [正常流]
+        点击后 api-jupyter/server/cloud 接口返回可用服务器配置，且响应结构符合预期 schema
         优先级：P0
+
+        合并说明：原 TC-API-SCHEMA-001（模块六）与本用例前置完全一致
+        （打开首页 → 点击导航 → 等待同一接口），仅断言粒度不同，故合并。
+        断言按「状态码 → 顶层字段 → data 非空 → data 项结构」由粗到细排列，
+        便于从首个失败的断言直接定位问题层级。
         """
-        api_responses: list[dict] = []
         all_api_calls: list[str] = []
 
         def handle_response(response: Response) -> None:
@@ -926,30 +979,44 @@ class TestApiAndConfig:
             if "api-jupyter" in response.url:
                 all_api_calls.append(response.url)
 
-            if API_JUPYTER_CLOUD in response.url:
-                try:
-                    body = response.json()
-                    api_responses.append({"status": response.status, "body": body})
-                except Exception:
-                    api_responses.append({"status": response.status, "body": None})
-
         page_fixture.on("response", handle_response)
         _goto_home(page_fixture)
 
-        nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
-        nav_item.click()
-        page_fixture.wait_for_timeout(3000)
+        # 点击导航并显式等待接口响应，替代固定 3s 睡眠
+        try:
+            response = _click_nav_expect_cloud_api(page_fixture)
+        except PlaywrightTimeout:
+            pytest.fail(
+                f"未检测到 {API_JUPYTER_CLOUD} 接口请求。实际调用的API: {all_api_calls}"
+            )
 
         # 断言：API 请求被触发且返回 200
-        assert len(api_responses) > 0, f"未检测到 {API_JUPYTER_CLOUD} 接口请求。实际调用的API: {all_api_calls}"
-        assert api_responses[0]["status"] == 200, f"API 返回非 200 状态码: {api_responses[0]['status']}"
+        assert response.status == 200, f"API 返回非 200 状态码: {response.status}"
 
         # 断言：响应体包含服务器配置 data 数组
-        body = api_responses[0]["body"]
+        try:
+            body = response.json()
+        except Exception:
+            body = None
         assert body is not None, "API 响应体解析失败"
-        assert "data" in body, "API 响应缺少 data 字段"
+
+        # 断言顶层字段（原 TC-API-SCHEMA-001）
+        assert "code" in body, "响应缺少 code 字段"
+        assert "msg" in body, "响应缺少 msg 字段"
+        assert "data" in body, "响应缺少 data 字段"
+
+        # 断言：响应体包含非空服务器配置 data 数组
         assert isinstance(body["data"], list), "API 响应 data 字段不是数组"
         assert len(body["data"]) > 0, "API 响应 data 数组为空"
+
+        # 断言 data 数组元素结构（原 TC-API-SCHEMA-001）
+        for item in body["data"]:
+            assert "id" in item, "data 项缺少 id 字段"
+            assert "name" in item, "data 项缺少 name 字段"
+            assert "specs" in item, "data 项缺少 specs 字段"
+            assert "images" in item, "data 项缺少 images 字段"
+            assert isinstance(item["specs"], list), "specs 不是数组"
+            assert isinstance(item["images"], list), "images 不是数组"
 
     def test_dialog_shows_server_specs(self, page_fixture: Page) -> None:
         """
@@ -1008,11 +1075,31 @@ class TestAuthentication:
         """
         TC-UI-AUTH-002 [权限][正常流] 登录状态下点击实训环境导航正常弹出配置对话框
         优先级：P0
+
+        修复记录：原实现为 `goto(BASE_URL)` → `_login_if_needed()`，而
+        `_login_if_needed` 仅在 URL 含 /login 或页面存在密码框时才填表；
+        首页两者皆无，该调用实为空操作，用例走的是匿名路径，
+        与 TC-UI-NAV-003 断言同一件事，P0「登录态」覆盖名不副实。
+        现改用 `_login_to_usercenter`（完整验证码 + 滑块流程），
+        并在点击导航前显式校验登录态已建立。
         """
+        # 步骤1：完成用户中心登录（环境不可用时内部会 pytest.skip）
+        _login_to_usercenter(page_fixture)
+
+        # 步骤2：回到主站
         page_fixture.goto(BASE_URL)
-        _login_if_needed(page_fixture)
         _ensure_nav_visible(page_fixture)
 
+        # 步骤3：前置校验登录态确已建立，避免再次退化成匿名路径。
+        # 登录后主站不应再出现「登录」入口；该入口仍在即说明登录态未带过来。
+        login_entry = page_fixture.locator(
+            ".header-toolbar a:has-text('登录'), .header-nav a:has-text('登录')"
+        )
+        assert login_entry.count() == 0 or not login_entry.first.is_visible(), (
+            "主站仍显示「登录」入口，登录态未生效 —— 本用例无法验证登录场景"
+        )
+
+        # 步骤4：点击实训环境导航
         page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
         assert dialog is not None, "登录后点击实训环境未弹出配置对话框"
         expect(dialog).to_be_visible()
@@ -1047,33 +1134,9 @@ class TestEdgeCases:
         visible_dialogs = [d for d in dialogs if d.is_visible()]
         assert len(visible_dialogs) <= 1, f"快速双击后产生了多个对话框: {len(visible_dialogs)}"
 
-    def test_dialog_close_by_esc(self, page_fixture: Page) -> None:
-        """
-        TC-UI-EDGE-002 [异常] 使用取消按钮可关闭配置对话框（当前实现 ESC 不支持关闭）
-        优先级：P1
-        """
-        _goto_home(page_fixture)
-
-        page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-        assert dialog is not None
-
-        # 实际调试发现：ESC 键无法关闭该对话框，使用取消按钮替代
-        cancel_btn = dialog.locator(DIALOG_CANCEL_BTN_SELECTOR).first
-        if cancel_btn.count() > 0 and cancel_btn.is_visible():
-            cancel_btn.click()
-        else:
-            # 退而求其次：点击遮罩层尝试关闭
-            mask = page_fixture.locator(".o-layer-mask").first
-            if mask.count() > 0 and mask.is_visible():
-                mask.click()
-            else:
-                pytest.skip("未找到取消按钮或遮罩层，无法测试关闭功能")
-
-        page_fixture.wait_for_timeout(2000)
-
-        # 断言：对话框已关闭
-        visible = dialog.is_visible() if dialog.count() > 0 else False
-        assert not visible, "取消按钮未能关闭对话框"
+    # 原 TC-UI-EDGE-002（test_dialog_close_by_esc）已合并进模块一的
+    # test_dialog_cancel_closes —— 该用例立意测 ESC，但实测 ESC 关不掉对话框，
+    # 代码已回落点击取消按钮，与 TC-UI-NAV-004 完全重复。
 
     def test_network_interrupted(self, page_fixture: Page) -> None:
         """
@@ -1097,86 +1160,16 @@ class TestEdgeCases:
         body = page_fixture.locator("body")
         assert body.count() > 0, "网络中断后页面 body 丢失，可能前端崩溃"
 
-# -----------------------------------------------------------------------
-# 五、响应式布局与兼容性
-# -----------------------------------------------------------------------
+# 原「模块五：响应式布局与兼容性」（TC-UI-RESP-001）已合并进模块一的
+# test_nav_visible_in_all_viewports —— 两者遍历同一 VIEWPORTS 字典，
+# 且「点击弹窗」以「导航可见」为前提，属包含关系。
 
-class TestResponsiveLayout:
-    """模块五：响应式布局与兼容性"""
-
-    @pytest.mark.parametrize("viewport_name, size", VIEWPORTS.items())
-    def test_dialog_display_in_all_viewports(self, page_fixture: Page, viewport_name: str, size: tuple) -> None:
-        """
-        TC-UI-RESP-001 [正常流][响应式] 各视口下对话框均能正确弹出且内容可见
-        优先级：P1
-        """
-        width, height = size
-        page_fixture.set_viewport_size({"width": width, "height": height})
-        _goto_home(page_fixture)
-
-        # 移动端下导航项可能被折叠，跳过不可访问的视口
-        nav_item = page_fixture.locator(NAV_ITEM_SELECTOR)
-        if nav_item.count() == 0 or not nav_item.is_visible():
-            pytest.skip(f"视口 {viewport_name} 下导航栏被折叠，无法测试对话框")
-
-        page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-        assert dialog is not None, f"视口 {viewport_name} 下点击后未弹出对话框"
-        expect(dialog).to_be_visible()
-
-        # 断言：对话框内容可见（标题或规格选择器）
-        header = dialog.locator(DIALOG_HEADER_SELECTOR).first
-        spec_select = dialog.locator(".o-select").first
-        assert header.count() > 0 or spec_select.count() > 0, "对话框内容为空"
-
-# -----------------------------------------------------------------------
-# 六、接口辅助检查
-# -----------------------------------------------------------------------
-
-class TestApiConsistency:
-    """模块六：接口一致性校验"""
-
-    def test_api_response_schema(self, page_fixture: Page) -> None:
-        """
-        TC-API-SCHEMA-001 [正常流] api-jupyter/server/cloud 响应结构符合预期 schema
-        优先级：P1
-        """
-        api_responses: list[dict] = []
-
-        def handle_response(response: Response) -> None:
-            if API_JUPYTER_CLOUD in response.url and response.status == 200:
-                try:
-                    body = response.json()
-                    api_responses.append(body)
-                except Exception:
-                    pass
-
-        page_fixture.on("response", handle_response)
-        _goto_home(page_fixture)
-        page_fixture.locator(NAV_ITEM_SELECTOR).click()
-        page_fixture.wait_for_timeout(3000)
-
-        assert len(api_responses) > 0, "未捕获到 API 响应"
-        body = api_responses[0]
-
-        # 断言顶层字段
-        assert "code" in body, "响应缺少 code 字段"
-        assert "msg" in body, "响应缺少 msg 字段"
-        assert "data" in body, "响应缺少 data 字段"
-
-        # 断言 data 数组元素结构
-        for item in body.get("data", []):
-            assert "id" in item, "data 项缺少 id 字段"
-            assert "name" in item, "data 项缺少 name 字段"
-            assert "specs" in item, "data 项缺少 specs 字段"
-            assert "images" in item, "data 项缺少 images 字段"
-            assert isinstance(item["specs"], list), "specs 不是数组"
-            assert isinstance(item["images"], list), "images 不是数组"
-
-
+# 原「模块六：接口一致性校验」（TC-API-SCHEMA-001）已合并进模块二的
+# test_api_jupyter_cloud_returns_config —— 两者前置完全一致，仅断言粒度不同。
 
 
 # -----------------------------------------------------------------------
-# 七、Jupyter 实例启动流程
+# 六、Jupyter 实例启动流程
 # -----------------------------------------------------------------------
 
 class TestJupyterLaunch:
@@ -1369,14 +1362,19 @@ class TestJupyterPermission:
 功能点/维度 | 正常流 | 异常场景 | 边界值 | 空值 | 特殊字符 | 权限校验 | 数据唯一性 | 重复操作 | 异常输入
 -----------|--------|----------|--------|------|----------|----------|------------|----------|----------
 导航栏渲染 | ✅ TC-UI-NAV-001 | ✅ TC-UI-NAV-002 | ✅ 响应式视口 | N/A | N/A | N/A | N/A | ✅ TC-UI-EDGE-001 | N/A
-对话框弹出 | ✅ TC-UI-NAV-003 | ✅ TC-UI-DIALOG-001 | N/A | N/A | N/A | ✅ TC-UI-AUTH-001/002 | N/A | ✅ TC-UI-EDGE-001 | ✅ TC-UI-EDGE-004
-API 响应 | ✅ TC-API-JUPYTER-001 | ✅ TC-API-SCHEMA-001 | N/A | N/A | N/A | N/A | N/A | N/A | N/A
-配置展示 | ✅ TC-UI-DIALOG-001/002/003 | N/A | ✅ 移动端尺寸 | N/A | N/A | N/A | N/A | N/A | N/A
-关闭操作 | ✅ TC-UI-NAV-004 | ✅ TC-UI-EDGE-002/003 | N/A | N/A | N/A | N/A | N/A | ✅ TC-UI-EDGE-001 | N/A
-响应式布局 | ✅ TC-UI-RESP-001/002 | N/A | ✅ 视口边界 | N/A | N/A | N/A | N/A | N/A | N/A
+对话框弹出 | ✅ TC-UI-NAV-003 | ✅ TC-UI-DIALOG-001 | N/A | N/A | N/A | ✅ TC-UI-AUTH-001/002 | N/A | ✅ TC-UI-EDGE-001 | ✅ TC-UI-EDGE-003
+API 响应 | ✅ TC-API-JUPYTER-001 | ✅ TC-API-JUPYTER-001 | N/A | N/A | N/A | N/A | N/A | N/A | N/A
+配置展示 | ✅ TC-UI-DIALOG-001 | N/A | ✅ 响应式视口 | N/A | N/A | N/A | N/A | N/A | N/A
+关闭操作 | ✅ TC-UI-NAV-004 | ✅ TC-UI-NAV-004 | N/A | N/A | N/A | N/A | N/A | ✅ TC-UI-EDGE-001 | N/A
+响应式布局 | ✅ TC-UI-NAV-001 | N/A | ✅ 视口边界 | N/A | N/A | N/A | N/A | N/A | N/A
+实例启动 | ✅ TC-UI-JUPYTER-001 | N/A | ✅ 启动超时轮询 | N/A | N/A | ✅ TC-UI-JUPYTER-002 | N/A | N/A | N/A
 
 备注：
-- 空值/特殊字符/数据唯一性 对本功能（纯导航+弹窗）不适用，已在备注列标注 N/A。
-- 异常输入维度通过键盘 Enter 触发覆盖（TC-UI-EDGE-004）。
-- 实例启动后的 Jupyter 功能测试因涉及后端资源调度和多账号权限隔离，归入手动测试块。
+- 空值/特殊字符/数据唯一性 对本功能（纯导航+弹窗+实例调度）不适用，已标注 N/A。
+- 合并后一个用例函数可承载多个 TC 编号：
+  TC-UI-NAV-001 兼含原 TC-UI-RESP-001（响应式布局行）；
+  TC-UI-NAV-004 兼含原 TC-UI-EDGE-002（关闭操作异常列，ESC no-op 断言）；
+  TC-API-JUPYTER-001 兼含原 TC-API-SCHEMA-001（API 响应异常列，schema 校验）。
+- 异常输入维度由网络中断场景覆盖（TC-UI-EDGE-003）。
+- Jupyter 实例启动与权限隔离已从手动测试块转为自动化（TC-UI-JUPYTER-001/002）。
 """
