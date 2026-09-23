@@ -1,0 +1,25 @@
+# MindSpore 官网实训环境 UI 自动化测试依赖
+# 安装：pip install -r requirements.txt
+# 安装后还需下载浏览器内核：playwright install chromium
+
+# ---- 测试框架 ----
+pytest==9.1.1
+pytest-playwright==0.9.0
+pytest-base-url==2.1.0
+
+# ---- 浏览器自动化 ----
+playwright==1.62.0
+greenlet==3.5.5
+pyee==13.0.1
+
+# ---- HTML 测试报告（--html 参数依赖）----
+pytest-html==4.2.0
+pytest-metadata==3.1.1
+
+# ---- .env 配置加载 ----
+python-dotenv==1.2.2
+
+# ---- 滑块验证码自动破解（slider_solver.py 依赖）----
+# 缺失时滑块会回落人工处理，不影响其它用例
+pillow==12.3.0
+numpy==2.5.3
