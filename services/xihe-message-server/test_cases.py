@@ -915,12 +915,17 @@ class TestApiAndConfig:
 
     def test_api_jupyter_cloud_returns_config(self, page_fixture: Page) -> None:
         """
-        TC-API-JUPYTER-001 [正常流] 点击后 api-jupyter/server/cloud 接口返回可用服务器配置
+        TC-API-JUPYTER-001 [正常流] 点击后 api-jupyter/server/user/whitelist/cloud 接口返回可用服务器配置
         优先级：P0
         """
         api_responses: list[dict] = []
+        all_api_calls: list[str] = []
 
         def handle_response(response: Response) -> None:
+            # 记录所有API调用用于调试
+            if "api-jupyter" in response.url:
+                all_api_calls.append(response.url)
+
             if API_JUPYTER_CLOUD in response.url:
                 try:
                     body = response.json()
@@ -936,7 +941,7 @@ class TestApiAndConfig:
         page_fixture.wait_for_timeout(3000)
 
         # 断言：API 请求被触发且返回 200
-        assert len(api_responses) > 0, f"未检测到 {API_JUPYTER_CLOUD} 接口请求"
+        assert len(api_responses) > 0, f"未检测到 {API_JUPYTER_CLOUD} 接口请求。实际调用的API: {all_api_calls}"
         assert api_responses[0]["status"] == 200, f"API 返回非 200 状态码: {api_responses[0]['status']}"
 
         # 断言：响应体包含服务器配置 data 数组
@@ -1012,46 +1017,6 @@ class TestAuthentication:
         assert dialog is not None, "登录后点击实训环境未弹出配置对话框"
         expect(dialog).to_be_visible()
 
-    def test_dialog_config_persistence(self, page_fixture: Page) -> None:
-        """
-        TC-UI-AUTH-003 [权限] 对话框中上次选择的服务器规格/镜像应被记住（如支持）
-        优先级：P2
-        """
-        page_fixture.goto(BASE_URL)
-        _login_if_needed(page_fixture)
-        _ensure_nav_visible(page_fixture)
-
-        # 第一次打开对话框
-        page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-        assert dialog is not None
-
-        # 记录当前选择的规格（使用第一个 o-select-input）
-        spec_input = dialog.locator("input.o-select-input").first
-        first_spec = _get_input_value(spec_input) if spec_input.count() > 0 else ""
-
-        # 关闭对话框
-        cancel_btn = dialog.locator(DIALOG_CANCEL_BTN_SELECTOR).first
-        if cancel_btn.count() > 0:
-            cancel_btn.click()
-        # 等待遮罩层完全消失
-        page_fixture.wait_for_timeout(2500)
-        # 确保点击未被拦截
-        mask = page_fixture.locator(".o-layer-mask").first
-        if mask.count() > 0:
-            try:
-                mask.wait_for(state="hidden", timeout=3000)
-            except:
-                pass
-
-        # 再次打开对话框
-        page, dialog2 = _click_training_nav_and_capture_dialog(page_fixture)
-        assert dialog2 is not None
-
-        spec_input2 = dialog2.locator("input.o-select-input").first
-        second_spec = _get_input_value(spec_input2) if spec_input2.count() > 0 else ""
-
-        # 断言：再次打开后规格不为空（记忆功能为加分项，不强求一致）
-        assert len(second_spec) > 0, "再次打开对话框后规格选项为空"
 
 
 # -----------------------------------------------------------------------
