@@ -530,16 +530,36 @@ def _do_code_login(page: Page) -> None:
         return
 
     code_input = page.locator(LOGIN_ACCOUNT_INPUT).nth(1)
-    code_input.fill(code)
-    page.wait_for_timeout(800)
+    # Linux环境下增强输入可靠性：先清空，再逐字符输入，最后触发change事件
+    code_input.click()
+    page.wait_for_timeout(300)
+    code_input.fill("")
+    page.wait_for_timeout(200)
+    code_input.type(code, delay=100)  # 逐字符输入，每个字符间隔100ms
+    page.wait_for_timeout(500)
+
+    # 手动触发input和change事件，确保表单验证生效
+    code_input.evaluate("el => el.dispatchEvent(new Event('input', { bubbles: true }))")
+    code_input.evaluate("el => el.dispatchEvent(new Event('change', { bubbles: true }))")
+    page.wait_for_timeout(1000)
 
     submit = page.locator(LOGIN_SUBMIT_BTN).first
-    for _ in range(10):
-        if "o-btn-disabled" not in (submit.get_attribute("class") or ""):
+    # 等待登录按钮变为可用状态，最多等10秒
+    for i in range(20):
+        btn_class = submit.get_attribute("class") or ""
+        if "o-btn-disabled" not in btn_class and "disabled" not in btn_class:
+            print(f"   [登录] 登录按钮已就绪（第{i+1}次检查）")
             break
         page.wait_for_timeout(500)
-    submit.click()
+    else:
+        print("   [登录] 警告：登录按钮可能仍处于禁用状态")
+
+    # 确保按钮可见且可点击
+    submit.scroll_into_view_if_needed()
+    page.wait_for_timeout(500)
+    submit.click(force=True)  # 强制点击，绕过可能的遮罩层
     print("   [登录] 已提交验证码登录")
+    page.wait_for_timeout(3000)  # 等待登录请求完成
 
 
 def _do_password_login(page: Page) -> None:
@@ -612,18 +632,41 @@ def _login_to_usercenter(page: Page) -> None:
     else:
         _do_password_login(page)
 
-    # 等待离开登录页（双因子流程较长，给到 20s）
+    # 等待离开登录页（双因子流程较长，给到 25s）
     try:
         page.wait_for_url(
-            lambda url: "login" not in url and "usercenter" not in url, timeout=20000
+            lambda url: "login" not in url and "usercenter" not in url, timeout=25000
         )
         print("   [登录] 登录成功")
         return
     except PlaywrightTimeout:
         pass
 
-    # 仍在登录页：滑块残留则再处理一轮
+    # 仍在登录页：检查是否有错误提示
+    print("   [登录] 首次等待超时，检查页面状态...")
+    page.wait_for_timeout(2000)
+
+    # 检查验证码错误提示
+    for err_sel in [".form-item-extra", ".o-form-item-error", ".error-message", ".o-input-error"]:
+        err_loc = page.locator(err_sel).first
+        if err_loc.count() > 0 and err_loc.is_visible():
+            err_msg = err_loc.inner_text().strip()
+            if err_msg and any(kw in err_msg for kw in ["验证码", "错误", "过期", "失效"]):
+                print(f"   [登录] 检测到验证码错误提示: {err_msg}")
+                # 验证码错误，无需重试
+                try:
+                    page.screenshot(path="debug_code_error.png", full_page=True)
+                except Exception:
+                    pass
+                raise AssertionError(
+                    f"验证码提交后出现错误提示: {err_msg}\n"
+                    f"   可能原因：验证码已过期或输入错误\n"
+                    f"   截图: debug_code_error.png"
+                )
+
+    # 滑块残留则再处理一轮
     if _slider_visible(page):
+        print("   [登录] 检测到滑块残留，重新处理...")
         _await_slider_cleared(page, "登录提交")
         try:
             page.wait_for_url(
@@ -634,11 +677,14 @@ def _login_to_usercenter(page: Page) -> None:
         except PlaywrightTimeout:
             pass
 
-    # 若仍在登录页，尝试强制刷新页面（最多3次）
+    # 若仍在登录页，尝试刷新页面检查登录状态（最多3次）
     print("   [登录] 仍在登录页，尝试刷新页面检查登录状态...")
     for refresh_attempt in range(1, 4):
         print(f"   [登录] 刷新页面 {refresh_attempt}/3")
-        page.reload()
+        try:
+            page.reload(wait_until="domcontentloaded", timeout=10000)
+        except PlaywrightTimeout:
+            print(f"   [登录] 刷新超时，继续...")
         page.wait_for_timeout(3000)
 
         # 检查是否已离开登录页
@@ -647,8 +693,15 @@ def _login_to_usercenter(page: Page) -> None:
             print(f"   [登录] 刷新后登录成功，当前URL: {current_url}")
             return
 
-        # 检查是否仍在登录页
+        # 检查是否仍在登录页且表单已重置（说明登录失败）
         if "login" in current_url or "usercenter" in current_url:
+            # 检查登录表单是否存在且为空（说明被重置了）
+            account_input = page.locator(LOGIN_ACCOUNT_INPUT).first
+            if account_input.count() > 0:
+                input_value = _get_input_value(account_input)
+                if not input_value or input_value != TEST_ACCOUNT:
+                    print(f"   [登录] 表单已被重置，登录请求可能被拒绝")
+
             print(f"   [登录] 刷新后仍在登录相关页面: {current_url}")
             page.wait_for_timeout(2000)
             continue
