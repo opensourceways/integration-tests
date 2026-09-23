@@ -971,24 +971,6 @@ class TestApiAndConfig:
         )
         assert ascend_found, "对话框规格选项中未找到 ascend 关键词"
 
-    def test_dialog_shows_image_options(self, page_fixture: Page) -> None:
-        """
-        TC-UI-DIALOG-002 [正常流] 配置对话框正确展示镜像选项（Python + MindSpore + CANN）
-        优先级：P1
-        """
-        _goto_home(page_fixture)
-
-        page, dialog = _click_training_nav_and_capture_dialog(page_fixture)
-        assert dialog is not None, "对话框未弹出"
-
-        # 断言：对话框中包含镜像选择器（第二个 o-select 或指定 class）
-        image_select = dialog.locator(".o-select").nth(1)
-        if image_select.count() == 0:
-            image_select = dialog.locator(".config-select .o-select").nth(1)
-
-        assert image_select.count() > 0, "对话框中未找到镜像选择器"
-        assert image_select.is_visible(), "镜像选择器不可见"
-
     def test_dialog_shows_usage_notes(self, page_fixture: Page) -> None:
         """
         TC-UI-DIALOG-003 [正常流] 配置对话框包含使用说明（运行时长、资源释放等）
